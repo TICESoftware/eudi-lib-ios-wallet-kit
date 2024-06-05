@@ -213,8 +213,7 @@ public final class EudiWallet: ObservableObject {
 	///   - docType: docType of documents to present (optional)
 	///   - dataFormat: Exchanged data ``Format`` type
 	/// - Returns: A data dictionary that can be used to initialize a presentation service
-	public func prepareServiceDataParameters(docType: String? = nil, dataFormat: DataFormat = .cbor ) throws -> [String : Any] {
-		var parameters: [String: Any]
+	public func prepareServiceDataParameters(docType: String? = nil, dataFormat: DataFormat = .cbor ) throws -> MDocPresentationState {
 		switch dataFormat {
 		case .cbor:
 			guard var docs = try storageService.loadDocuments(), docs.count > 0 else { throw WalletError(description: "No documents found") }
@@ -222,13 +221,17 @@ public final class EudiWallet: ObservableObject {
 			if let docType { guard docs.count > 0 else { throw WalletError(description: "No documents of type \(docType) found") } }
 			let cborsWithKeys = docs.compactMap { $0.getCborData() }
 			guard cborsWithKeys.count > 0 else { throw WalletError(description: "Documents decode error") }
-			parameters = [InitializeKeys.document_signup_issuer_signed_obj.rawValue: Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.iss)), InitializeKeys.device_private_key_obj.rawValue: Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.dpk))]
-			if let trustedReaderCertificates { parameters[InitializeKeys.trusted_certificates.rawValue] = trustedReaderCertificates }
-			parameters[InitializeKeys.device_auth_method.rawValue] = deviceAuthMethod.rawValue
+            
+            
+			let signedObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.iss))
+            let privateKeyObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.dpk))
+            
+            return MDocPresentationState(input: .documentSingupIssuerSignedObj(parameters: signedObj, devicePrivateKeyObj: privateKeyObj),
+                                         trustedCertificates: trustedReaderCertificates ?? [],
+                                         deviceAuthMethod: deviceAuthMethod)
 		default:
 			fatalError("jwt format not implemented")
 		}
-		return parameters
 	}
 	
 	/// Begin attestation presentation to a verifier
@@ -239,17 +242,23 @@ public final class EudiWallet: ObservableObject {
 	/// - Returns: A presentation session instance,
 	public func beginPresentation(flow: FlowType, docType: String? = nil, dataFormat: DataFormat = .cbor) -> PresentationSession {
 		do {
-			let parameters = try prepareServiceDataParameters(docType: docType, dataFormat: dataFormat)
-			let docIdAndTypes = storage.getDocIdsToTypes()
 			switch flow {
 			case .ble:
-				let bleSvc = try BlePresentationService(parameters: parameters)
+                let parameters = try prepareServiceDataParameters(docType: docType, dataFormat: dataFormat)
+                let docIdAndTypes = storage.getDocIdsToTypes()
+                let mdocGattServer = try MdocGattServer(presentationState: parameters)
+                let bleSvc = try BlePresentationService(mdocGattServer: mdocGattServer)
 				return PresentationSession(presentationService: bleSvc, docIdAndTypes: docIdAndTypes, userAuthenticationRequired: userAuthenticationRequired)
-			case .openid4vp(let qrCode):
-				let openIdSvc = try OpenId4VpService(parameters: parameters, qrCode: qrCode, openId4VpVerifierApiUri: self.verifierApiUri, openId4VpVerifierLegalName: self.verifierLegalName)
+			case .openid4vp(let qrCode): // TODO: URL
+                let parameters = try prepareServiceDataParameters(docType: docType, dataFormat: dataFormat)
+                let docIdAndTypes = storage.getDocIdsToTypes()
+                let openIdSvc = try OpenId4VpService(state: parameters, openid4VPlinkData: qrCode, openId4VpVerifierApiUri: self.verifierApiUri, openId4VpVerifierLegalName: self.verifierLegalName)
 				return PresentationSession(presentationService: openIdSvc, docIdAndTypes: docIdAndTypes, userAuthenticationRequired: userAuthenticationRequired)
 			default:
-				return PresentationSession(presentationService: FaultPresentationService(error: PresentationSession.makeError(str: "Use beginPresentation(service:)")), docIdAndTypes: docIdAndTypes, userAuthenticationRequired: false)
+                let docIdAndTypes = storage.getDocIdsToTypes()
+				return PresentationSession(presentationService: FaultPresentationService(error: PresentationSession.makeError(str: "Use beginPresentation(service:)")),
+                                           docIdAndTypes: docIdAndTypes,
+                                           userAuthenticationRequired: false)
 			}
 		} catch {
 			return PresentationSession(presentationService: FaultPresentationService(error: error), docIdAndTypes: [:], userAuthenticationRequired: false)

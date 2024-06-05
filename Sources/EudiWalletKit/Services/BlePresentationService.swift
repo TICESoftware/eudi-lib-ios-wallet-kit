@@ -31,11 +31,11 @@ public class BlePresentationService : PresentationService {
 	var deviceEngagement: String?
 	var request: [String: Any]?
 	public var flow: FlowType { .ble }
-
-	public init(parameters: [String: Any]) throws {
-		bleServerTransfer = try MdocGattServer(parameters: parameters)
-		bleServerTransfer.delegate = self
-	}
+    
+    public init(mdocGattServer: MdocGattServer) throws {
+        bleServerTransfer = mdocGattServer
+        bleServerTransfer.delegate = self
+    }
 
 	/// Generate device engagement QR code 
 

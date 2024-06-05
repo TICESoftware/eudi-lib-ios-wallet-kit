@@ -77,7 +77,7 @@ public class PresentationSession: ObservableObject {
 			readerCertIssuerValid = request[UserRequestKeys.reader_auth_validated.rawValue] as? Bool
 			readerCertValidationMessage = request[UserRequestKeys.reader_certificate_validation_message.rawValue] as? String
 		}
-		readerLegalName = request[UserRequestKeys.reader_legal_name.rawValue] as? String
+        readerLegalName = request[UserRequestKeys.reader_legal_name.rawValue] as? String
 		status = .requestReceived
 	}
 	
