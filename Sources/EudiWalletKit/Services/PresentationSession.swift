@@ -119,9 +119,9 @@ public class PresentationSession: ObservableObject {
 	/// On success ``disclosedDocuments`` published variable will be set  and ``status`` will be ``.requestReceived``
 	/// On error ``uiError`` will be filled and ``status`` will be ``.error``
 	/// - Returns: A request dictionary keyed by ``MdocDataTransfer.UserRequestKeys``
-	public func receiveRequest() async -> [String: Any]? {
+    public func receiveRequest(uri: URL) async -> [String: Any]? {
 		do {
-			let request = try await presentationService.receiveRequest()
+            let request = try await presentationService.receiveRequest(uri: uri)
 			try await decodeRequest(request)
 			return request
 		} catch {

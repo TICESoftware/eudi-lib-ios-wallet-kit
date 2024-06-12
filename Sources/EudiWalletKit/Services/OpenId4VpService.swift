@@ -40,7 +40,6 @@ public class OpenId4VpService: PresentationService {
     var sessionTranscript: SessionTranscript!
     var eReaderPub: CoseKey? // Abstract to use any key (CoseKey or JSONWebKey)
     
-    var openid4VPlink: String
     var openId4VpVerifierApiUri: String?
 	var openId4VpVerifierLegalName: String?
     
@@ -53,13 +52,9 @@ public class OpenId4VpService: PresentationService {
 	var readerCertificateIssuer: String?
 	var readerCertificateValidationMessage: String?
     
-    init(state: MDocPresentationState, openid4VPlinkData: Data, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?) throws {
-        self.flow = .openid4vp(qrCode: openid4VPlinkData)
+    init(state: MDocPresentationState, openid4VPURI: URL, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?) throws {
+        self.flow = .openid4vp(uri: openid4VPURI)
         self.state = state
-        guard let openid4VPlink = String(data: openid4VPlinkData, encoding: .utf8) else {
-            throw PresentationSession.makeError(str: "QR_DATA_MALFORMED")
-        }
-        self.openid4VPlink = openid4VPlink
         self.openId4VpVerifierApiUri = openId4VpVerifierApiUri
 		self.openId4VpVerifierLegalName = openId4VpVerifierLegalName
     }
@@ -101,10 +96,10 @@ public class OpenId4VpService: PresentationService {
 	///  Receive request from an openid4vp URL
 	///
 	/// - Returns: The requested items.
-	public func receiveRequest() async throws -> [String: Any] {
-        guard status != .error, let openid4VPURI = URL(string: openid4VPlink) else { throw PresentationSession.makeError(str: "Invalid link \(openid4VPlink)") }
+    public func receiveRequest(uri: URL) async throws -> [String: Any] {
+        guard status != .error else { throw PresentationSession.makeError(str: "Can not receive request due to error state") }
         siopOpenId4Vp = SiopOpenID4VP(walletConfiguration: getWalletConf(verifierApiUrl: openId4VpVerifierApiUri, verifierLegalName: openId4VpVerifierLegalName))
-        let authorizationRequest = try await siopOpenId4Vp.authorize(url: openid4VPURI)
+        let authorizationRequest = try await siopOpenId4Vp.authorize(url: uri)
         return try await receiveRequest(authorizationRequest)
 	}
 	
