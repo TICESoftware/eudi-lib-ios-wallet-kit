@@ -247,7 +247,7 @@ public final class EudiWallet: ObservableObject {
 	public func beginPresentation(flow: FlowType, docType: String? = nil, dataFormat: DataFormat = .cbor) -> PresentationSession {
 		do {
 			switch flow {
-			case .ble:
+			case .bleMdoc:
                 let parameters = try prepareServiceDataParameters(docType: docType, dataFormat: dataFormat)
                 let docIdAndTypes = storage.getDocIdsToTypes()
                 let mdocGattServer = try MdocGattServer(presentationState: parameters)

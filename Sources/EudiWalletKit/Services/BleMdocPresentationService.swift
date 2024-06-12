@@ -30,7 +30,7 @@ public class BleMdocPresentationService : PresentationService {
 	var handleSelected: ((Bool, RequestItems?) -> Void)?
 	var deviceEngagement: String?
 	var request: [String: Any]?
-	public var flow: FlowType { .ble }
+	public var flow: FlowType { .bleMdoc }
     
     public init(mdocGattServer: MdocGattServer) throws {
         bleServerTransfer = mdocGattServer

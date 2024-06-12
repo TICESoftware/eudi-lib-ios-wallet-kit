@@ -21,11 +21,11 @@ import Foundation
 /// Data exchange flow type
 public enum FlowType: Codable, Hashable {
 	
-	case ble
+	case bleMdoc
 	case openid4vp(uri: URL)
 	case other
-	/// True if proximity flow type (currently ``ble``)
-	public var isProximity: Bool { switch self { case .ble: true; default: false } }
+	/// True if proximity flow type (currently ``bleMdoc``)
+	public var isProximity: Bool { switch self { case .bleMdoc: true; default: false } }
 //	public var qrCode: Data? { if case let .openid4vp(qrCode) = self { qrCode} else { nil} }
 }
 
