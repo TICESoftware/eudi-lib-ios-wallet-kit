@@ -51,7 +51,7 @@ public class BlePresentationService : PresentationService {
 	///  Receive request via BLE
 	/// 
 	/// - Returns: The requested items. 
-	public func receiveRequest() async throws -> [String: Any] {
+    public func receiveRequest(uri: URL) async throws -> [String: Any] {
 		return try await withCheckedThrowingContinuation { c in
 			continuationRequest = c
 		}

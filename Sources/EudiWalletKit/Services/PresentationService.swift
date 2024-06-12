@@ -31,7 +31,7 @@ public protocol PresentationService {
 	///
 	/// - Returns: The requested items.
 	/// Receive request.
-	func receiveRequest() async throws -> [String: Any]
+    func receiveRequest(uri: URL) async throws -> [String: Any]
 	/// Send response to verifier
 	/// - Parameters:
 	///   - userAccepted: True if user accepted to send the response
