@@ -247,7 +247,7 @@ public final class EudiWallet: ObservableObject {
                 let parameters = try prepareServiceDataParameters(docType: docType, dataFormat: dataFormat)
                 let docIdAndTypes = storage.getDocIdsToTypes()
                 let mdocGattServer = try MdocGattServer(presentationState: parameters)
-                let bleSvc = try BlePresentationService(mdocGattServer: mdocGattServer)
+                let bleSvc = try BleMdocPresentationService(mdocGattServer: mdocGattServer)
 				return PresentationSession(presentationService: bleSvc, docIdAndTypes: docIdAndTypes, userAuthenticationRequired: userAuthenticationRequired)
 			case .openid4vp(let url):
                 let parameters = try prepareServiceDataParameters(docType: docType, dataFormat: dataFormat)
