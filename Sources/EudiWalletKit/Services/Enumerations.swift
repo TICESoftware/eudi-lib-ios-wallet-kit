@@ -35,6 +35,15 @@ public enum FlowType: Codable, Hashable {
         case .other: false
         }
     }
+    
+    public var dataFormat: DataFormat {
+        switch self {
+        case .bleMdoc: return .cbor
+        case .openID4VPOverHTTP: return .sdjwt
+        case .openID4VPOverBLE: return .cbor
+        case .other: return .sdjwt
+        }
+    }
 }
 
 /// Data format of the exchanged data
