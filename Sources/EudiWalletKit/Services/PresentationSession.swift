@@ -40,7 +40,8 @@ public class PresentationSession: ObservableObject {
 	/// Status of the data transfer.
 	@Published public var status: TransferStatus = .initializing
 	/// The ``FlowType`` instance
-	// public var flow: FlowType { presentationService.flow }
+    public var flow: FlowType { presentationService.flow }
+    
 	var handleSelected: ((Bool, RequestItems?) -> Void)?
 	/// Device engagement data (QR data for the BLE flow)
 	@Published public var deviceEngagement: String?
