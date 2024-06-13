@@ -52,16 +52,16 @@ public class OpenId4VpService: PresentationService {
 	var readerCertificateIssuer: String?
 	var readerCertificateValidationMessage: String?
     
-    init(state: MDocPresentationState, openid4VPURI: URL, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?) throws {
-        self.flow = .openid4vp(uri: openid4VPURI)
+    init(state: MDocPresentationState, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?) throws {
         self.state = state
+        self.flow = .openID4VPOverHTTP
         self.openId4VpVerifierApiUri = openId4VpVerifierApiUri
 		self.openId4VpVerifierLegalName = openId4VpVerifierLegalName
     }
 	
 	public func startQrEngagement() async throws -> String? { nil }
 	
-    public func receiveRequest(_ authorizationRequest: AuthorizationRequest) async throws -> [String: Any] {
+    private func receiveRequest(_ authorizationRequest: AuthorizationRequest) async throws -> [String: Any] {
         switch authorizationRequest {
         case .notSecured(data: _):
             throw PresentationSession.makeError(str: "Not secure request received.")
