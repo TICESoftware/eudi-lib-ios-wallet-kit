@@ -226,7 +226,7 @@ public final class EudiWallet: ObservableObject {
 			let signedObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.iss))
             let privateKeyObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.dpk))
             
-            return MDocPresentationState(input: .documentSingupIssuerSignedObj(parameters: signedObj, devicePrivateKeyObj: privateKeyObj),
+            return MDocPresentationState(input: .documentSignupIssuerSignedObj(parameters: signedObj, devicePrivateKeyObj: privateKeyObj),
                                          trustedCertificates: trustedReaderCertificates ?? [],
                                          deviceAuthMethod: deviceAuthMethod)
 		default:
