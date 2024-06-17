@@ -11,17 +11,17 @@ public protocol OpenId4VciUserAuthorizationService {
     func getAuthorizationCode(requestURL: URL) async throws -> String?
 }
 
-class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUserAuthorizationService, ASWebAuthenticationPresentationContextProviding {
-    var config: OpenId4VCIConfig
-    var logger: Logging.Logger
+public class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUserAuthorizationService, ASWebAuthenticationPresentationContextProviding {
+    public var config: OpenId4VCIConfig
+    public var logger: Logging.Logger
     
-    init(config: OpenId4VCIConfig, logger: Logging.Logger) {
+    public init(config: OpenId4VCIConfig) {
         self.config = config
-        self.logger = logger
+        self.logger = Logger(label: "OpenId4VCI")
     }
     
     @MainActor
-    func getAuthorizationCode(requestURL: URL) async throws -> String? {
+    public func getAuthorizationCode(requestURL: URL) async throws -> String? {
         logger.info("--> [AUTHORIZATION] Retrieving Authorization Code using default AuthorizationService with request URL \(requestURL)")
         return try await withCheckedThrowingContinuation { c in
             let authenticationSession = ASWebAuthenticationSession(url: requestURL, callbackURLScheme: config.authFlowRedirectionURI.scheme!) { optionalUrl, optionalError in
@@ -36,7 +36,7 @@ class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUserAuthori
         }
     }
     
-    func presentationAnchor(for session: ASWebAuthenticationSession)
+    public func presentationAnchor(for session: ASWebAuthenticationSession)
     -> ASPresentationAnchor {
 #if os(iOS)
         let window = UIApplication.shared.windows.first { $0.isKeyWindow }
@@ -47,17 +47,17 @@ class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUserAuthori
     }
 }
 
-class OpenId4VciUserAuthorizationServiceEIDReader: NSObject, OpenId4VciUserAuthorizationService, ASWebAuthenticationPresentationContextProviding {
-    var config: OpenId4VCIConfig
-    var logger: Logging.Logger
+public class OpenId4VciUserAuthorizationServiceEIDReader: NSObject, OpenId4VciUserAuthorizationService, ASWebAuthenticationPresentationContextProviding {
+    public var config: OpenId4VCIConfig
+    public var logger: Logging.Logger
     
-    init(config: OpenId4VCIConfig, logger: Logging.Logger) {
+    public init(config: OpenId4VCIConfig) {
         self.config = config
-        self.logger = logger
+        self.logger = Logger(label: "OpenId4VCI")
     }
     
     @MainActor
-    func getAuthorizationCode(requestURL: URL) async throws -> String? {
+    public func getAuthorizationCode(requestURL: URL) async throws -> String? {
         logger.info("--> [AUTHORIZATION] Starting EID Flow with request URL \(requestURL)")
         
         return try await withCheckedThrowingContinuation { c in
@@ -73,7 +73,7 @@ class OpenId4VciUserAuthorizationServiceEIDReader: NSObject, OpenId4VciUserAutho
         }
     }
     
-    func presentationAnchor(for session: ASWebAuthenticationSession)
+    public func presentationAnchor(for session: ASWebAuthenticationSession)
     -> ASPresentationAnchor {
 #if os(iOS)
         let window = UIApplication.shared.windows.first { $0.isKeyWindow }
