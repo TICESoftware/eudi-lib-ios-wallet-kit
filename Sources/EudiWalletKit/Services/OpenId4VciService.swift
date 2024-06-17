@@ -41,12 +41,12 @@ public class OpenId4VCIService: NSObject {
          credentialIssuerURL: String,
          clientId: String,
          callbackScheme: String,
-         authorizationService: OpenId4VciUserAuthorizationService) {
+         authorizationService: OpenId4VciUserAuthorizationService?) {
 		self.issueReq = issueRequest
 		self.credentialIssuerURL = credentialIssuerURL
-        self.authorizationService = authorizationService
 		logger = Logger(label: "OpenId4VCI")
 		config = .init(clientId: clientId, authFlowRedirectionURI: URL(string: callbackScheme)!)
+        self.authorizationService = authorizationService ?? OpenId4VciUserAuthorizationServiceDefault(config: config)
 	}
 	
 	fileprivate func initSecurityKeys(_ useSecureEnclave: Bool) throws {
