@@ -24,7 +24,7 @@ import CryptoKit
 import Security
 import WalletStorage
 
-public class OpenId4VCIService: NSObject, ASWebAuthenticationPresentationContextProviding {
+public class OpenId4VCIService: NSObject {
 	let issueReq: IssueRequest
 	let credentialIssuerURL: String
 	var privateKey: SecKey!
@@ -34,11 +34,17 @@ public class OpenId4VCIService: NSObject, ASWebAuthenticationPresentationContext
 	let logger: Logger
 	let config: OpenId4VCIConfig
 	let alg = JWSAlgorithm(.ES256)
+    let authorizationService: OpenId4VciUserAuthorizationService
 	static var metadataCache = [String: CredentialOffer]()
 	
-	init(issueRequest: IssueRequest, credentialIssuerURL: String, clientId: String, callbackScheme: String) {
+	init(issueRequest: IssueRequest,
+         credentialIssuerURL: String,
+         clientId: String,
+         callbackScheme: String,
+         authorizationService: OpenId4VciUserAuthorizationService) {
 		self.issueReq = issueRequest
 		self.credentialIssuerURL = credentialIssuerURL
+        self.authorizationService = authorizationService
 		logger = Logger(label: "OpenId4VCI")
 		config = .init(clientId: clientId, authFlowRedirectionURI: URL(string: callbackScheme)!)
 	}
@@ -189,7 +195,7 @@ public class OpenId4VCIService: NSObject, ASWebAuthenticationPresentationContext
 		}
 	}
 	
-	private func authorizeRequestWithAuthCodeUseCase(issuer: Issuer, offer: CredentialOffer) async throws -> AuthorizedRequest {
+    private func authorizeRequestWithAuthCodeUseCase(issuer: Issuer, offer: CredentialOffer) async throws -> AuthorizedRequest {
 		var pushedAuthorizationRequestEndpoint = ""
 		if case let .oidc(metaData) = offer.authorizationServerMetadata, let endpoint = metaData.pushedAuthorizationRequestEndpoint {
 			pushedAuthorizationRequestEndpoint = endpoint
@@ -202,8 +208,9 @@ public class OpenId4VCIService: NSObject, ASWebAuthenticationPresentationContext
 		
 		if case let .success(request) = parPlaced, case let .par(parRequested) = request {
 			logger.info("--> [AUTHORIZATION] Placed PAR. Get authorization code URL is: \(parRequested.getAuthorizationCodeURL)")
-			let authorizationCode = try await loginUserAndGetAuthCode(
-				getAuthorizationCodeUrl: parRequested.getAuthorizationCodeURL.url) ?? { throw WalletError(description: "Could not retrieve authorization code") }()
+            
+            let authorizationCode = try await authorizationService.getAuthorizationCode(requestURL: parRequested.getAuthorizationCodeURL.url) ?? { throw WalletError(description: "Could not retrieve authorization code") }()
+            
 			logger.info("--> [AUTHORIZATION] Authorization code retrieved")
 			let unAuthorized = await issuer.handleAuthorizationCode(parRequested: request, authorizationCode: .authorizationCode(authorizationCode: authorizationCode))
 			switch unAuthorized {
@@ -298,38 +305,6 @@ public class OpenId4VCIService: NSObject, ASWebAuthenticationPresentationContext
 		case .failure(let error):
 			throw WalletError(description: error.localizedDescription)
 		}
-	}
-	
-	@MainActor
-	private func loginUserAndGetAuthCode(getAuthorizationCodeUrl: URL) async throws -> String? {
-		return try await withCheckedThrowingContinuation { c in
-			let authenticationSession = ASWebAuthenticationSession(url: getAuthorizationCodeUrl, callbackURLScheme: config.authFlowRedirectionURI.scheme!) { optionalUrl, optionalError in
-				guard optionalError == nil else { c.resume(throwing: OpenId4VCIError.authRequestFailed(optionalError!)); return }
-				guard let url = optionalUrl else { c.resume(throwing: OpenId4VCIError.authorizeResponseNoUrl); return }
-				guard let code = url.getQueryStringParameter("code") else { c.resume(throwing: OpenId4VCIError.authorizeResponseNoCode); return }
-				c.resume(returning: code)
-			}
-			authenticationSession.prefersEphemeralWebBrowserSession = true
-			authenticationSession.presentationContextProvider = self
-			authenticationSession.start()
-		}
-	}
-	
-	public func presentationAnchor(for session: ASWebAuthenticationSession)
-	-> ASPresentationAnchor {
-#if os(iOS)
-		let window = UIApplication.shared.windows.first { $0.isKeyWindow }
-		return window ?? ASPresentationAnchor()
-#else
-		return ASPresentationAnchor()
-#endif
-	}
-}
-
-fileprivate extension URL {
-	func getQueryStringParameter(_ parameter: String) -> String? {
-		guard let url = URLComponents(string: self.absoluteString) else { return nil }
-		return url.queryItems?.first(where: { $0.name == parameter })?.value
 	}
 }
 

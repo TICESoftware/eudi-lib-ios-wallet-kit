@@ -72,7 +72,7 @@ public final class EudiWallet: ObservableObject {
 	///   - docType: document type
 	///   - promptMessage: Prompt message for biometric authentication (optional)
 	/// - Returns: (Issue request key pair, vci service, unique id)
-	func prepareIssuing(docType: String?, promptMessage: String? = nil) async throws -> (IssueRequest, OpenId4VCIService, String) {
+    func prepareIssuing(docType: String?, promptMessage: String? = nil, authorizationService: OpenId4VciUserAuthorizationService) async throws -> (IssueRequest, OpenId4VCIService, String) {
 		guard let openID4VciIssuerUrl else { throw WalletError(description: "issuer Url not defined")}
 		guard let openID4VciClientId else { throw WalletError(description: "clientId not defined")}
 		let id: String = UUID().uuidString
@@ -80,7 +80,7 @@ public final class EudiWallet: ObservableObject {
 			return try await beginIssueDocument(id: id, privateKeyType: useSecureEnclave ? .secureEnclaveP256 : .x963EncodedP256, saveToStorage: false)
 		}, disabled: !userAuthenticationRequired || docType == nil, dismiss: {}, localizedReason: promptMessage ?? NSLocalizedString("issue_document", comment: "").replacingOccurrences(of: "{docType}", with: NSLocalizedString(docType ?? "", comment: "")))
 		guard let issueReq else { throw LAError(.userCancel)}
-		let openId4VCIService = OpenId4VCIService(issueRequest: issueReq, credentialIssuerURL: openID4VciIssuerUrl, clientId: openID4VciClientId, callbackScheme: openID4VciRedirectUri)
+        let openId4VCIService = OpenId4VCIService(issueRequest: issueReq, credentialIssuerURL: openID4VciIssuerUrl, clientId: openID4VciClientId, callbackScheme: openID4VciRedirectUri, authorizationService: authorizationService)
 		return (issueReq, openId4VCIService, id)
 	}
 	
@@ -92,8 +92,8 @@ public final class EudiWallet: ObservableObject {
 	///   - format: Optional format type. Defaults to cbor
 	///   - promptMessage: Prompt message for biometric authentication (optional)
 	/// - Returns: The document issued. It is saved in storage.
-	@discardableResult public func issueDocument(docType: String, format: DataFormat = .cbor, promptMessage: String? = nil) async throws -> WalletStorage.Document {
-		let (issueReq, openId4VCIService, id) = try await prepareIssuing(docType: docType, promptMessage: promptMessage)
+	@discardableResult public func issueDocument(docType: String, format: DataFormat = .cbor, promptMessage: String? = nil, authorizationService: OpenId4VciUserAuthorizationService) async throws -> WalletStorage.Document {
+        let (issueReq, openId4VCIService, id) = try await prepareIssuing(docType: docType, promptMessage: promptMessage, authorizationService: authorizationService)
 		let data = try await openId4VCIService.issueDocument(docType: docType, format: format, useSecureEnclave: useSecureEnclave)
 		return try await finalizeIssuing(id: id, data: data, docType: docType, format: format, issueReq: issueReq, openId4VCIService: openId4VCIService)
 	}
@@ -128,8 +128,8 @@ public final class EudiWallet: ObservableObject {
 	///   - format: data format
 	///   - useSecureEnclave: whether to use secure enclave (if supported)
 	/// - Returns: Offered document info model
-	public func resolveOfferUrlDocTypes(uriOffer: String, format: DataFormat = .cbor, useSecureEnclave: Bool = true) async throws -> [OfferedDocModel] {
-		let (_, openId4VCIService, _) = try await prepareIssuing(docType: nil)
+	public func resolveOfferUrlDocTypes(uriOffer: String, format: DataFormat = .cbor, useSecureEnclave: Bool = true, authorizationService: OpenId4VciUserAuthorizationService) async throws -> [OfferedDocModel] {
+        let (_, openId4VCIService, _) = try await prepareIssuing(docType: nil, authorizationService: authorizationService)
 		return try await openId4VCIService.resolveOfferDocTypes(uriOffer: uriOffer, format: format)
 	}
 	
@@ -142,13 +142,13 @@ public final class EudiWallet: ObservableObject {
 	///   - useSecureEnclave: whether to use secure enclave (if supported)
 	///   - claimSet: claim set (optional)
 	/// - Returns: Array of issued and stored documents
-	public func issueDocumentsByOfferUrl(offerUri: String, docTypes: [OfferedDocModel], format: DataFormat = .cbor, promptMessage: String? = nil, useSecureEnclave: Bool = true, claimSet: ClaimSet? = nil) async throws -> [WalletStorage.Document] {
+    public func issueDocumentsByOfferUrl(offerUri: String, docTypes: [OfferedDocModel], format: DataFormat = .cbor, promptMessage: String? = nil, useSecureEnclave: Bool = true, claimSet: ClaimSet? = nil, authorizationService: OpenId4VciUserAuthorizationService) async throws -> [WalletStorage.Document] {
 		guard format == .cbor else { throw fatalError("jwt format not implemented") }
-		var (issueReq, openId4VCIService, id) = try await prepareIssuing(docType: docTypes.map(\.docType).joined(separator: ", "), promptMessage: promptMessage)
+        var (issueReq, openId4VCIService, id) = try await prepareIssuing(docType: docTypes.map(\.docType).joined(separator: ", "), promptMessage: promptMessage, authorizationService: authorizationService)
 		let docsData = try await openId4VCIService.issueDocumentsByOfferUrl(offerUri: offerUri, docTypes: docTypes, format: format, useSecureEnclave: useSecureEnclave, claimSet: claimSet)
 		var documents = [WalletStorage.Document]()
 		for (i, docData) in docsData.enumerated() {
-			if i > 0 { (issueReq, openId4VCIService, id) = try await prepareIssuing(docType: nil) }
+            if i > 0 { (issueReq, openId4VCIService, id) = try await prepareIssuing(docType: nil, authorizationService: authorizationService) }
 			openId4VCIService.usedSecureEnclave = useSecureEnclave && SecureEnclave.isAvailable
 			documents.append(try await finalizeIssuing(id: id, data: docData, docType: nil, format: format, issueReq: issueReq, openId4VCIService: openId4VCIService))
 		}
@@ -226,7 +226,7 @@ public final class EudiWallet: ObservableObject {
 			let signedObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.iss))
             let privateKeyObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map(\.dpk))
             
-            return MDocPresentationState(input: .documentSingupIssuerSignedObj(parameters: signedObj, devicePrivateKeyObj: privateKeyObj),
+            return MDocPresentationState(input: .documentSignupIssuerSignedObj(parameters: signedObj, devicePrivateKeyObj: privateKeyObj),
                                          trustedCertificates: trustedReaderCertificates ?? [],
                                          deviceAuthMethod: deviceAuthMethod)
 		default:
