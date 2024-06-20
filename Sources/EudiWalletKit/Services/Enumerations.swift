@@ -47,6 +47,7 @@ public enum FlowType: Codable, Hashable {
 }
 
 /// Data format of the exchanged data
+/// TODO: Get rid of "DataFormat". It is in case of CBOR an encoding and in case of SD-JWT a document format, thus it does not make sense. Use ClaimFormat (defined in PresentationExchange).
 public enum DataFormat: String {
 	case cbor = "cbor"
 	case sdjwt = "sdjwt"

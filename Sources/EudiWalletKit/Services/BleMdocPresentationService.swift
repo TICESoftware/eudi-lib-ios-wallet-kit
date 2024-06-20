@@ -56,6 +56,23 @@ public class BleMdocPresentationService : PresentationService {
 			continuationRequest = c
 		}
 	}
+    
+    /// Send response via BLE
+    ///
+    /// - Parameters:
+    ///   - userAccepted: True if user accepted to send the response
+    ///   - itemsToSend: The selected items to send organized in document types and namespaces
+    public func sendResponse(_ response: PresentationResponse) async throws -> URL? {
+        _ = try await withCheckedThrowingContinuation { c in
+            continuationResponse = c
+            switch response {
+            case .accepted(let itemsToSend): handleSelected?(true, itemsToSend)
+            case .denied: handleSelected?(false, nil)
+            }
+            handleSelected = nil
+        }
+        return nil
+    }
 	
 	/// Send response via BLE
 	/// 

@@ -152,7 +152,7 @@ public class OpenId4VCIService: NSObject, ASWebAuthenticationPresentationContext
 	
 	func getCredentialIdentifier(credentialsSupported: [CredentialConfigurationIdentifier: CredentialSupported], docType: String, format: DataFormat) throws -> (identifier: CredentialConfigurationIdentifier, scope: String) {
 		switch format {
-		case .cbor:
+        case .cbor:
 			guard let credential = credentialsSupported.first(where: { if case .msoMdoc(let msoMdocCred) = $0.value, msoMdocCred.docType == docType { true } else { false } }), case let .msoMdoc(msoMdocConf) = credential.value, let scope = msoMdocConf.scope else {
 				logger.error("No credential for docType \(docType). Currently supported credentials: \(credentialsSupported.values)")
 				throw WalletError(description: "Issuer does not support doc type\(docType)")

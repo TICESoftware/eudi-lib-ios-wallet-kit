@@ -139,9 +139,13 @@ public class PresentationSession: ObservableObject {
 	public func sendResponse(userAccepted: Bool, itemsToSend: RequestItems, onCancel: (() -> Void)? = nil, onSuccess: ((URL?) -> Void)? = nil) async {
 		do {
 			await MainActor.run {status = .userSelected }
-			let action = { [ weak self] in _ = try await self?.presentationService.sendResponse(userAccepted: userAccepted, itemsToSend: itemsToSend, onSuccess: onSuccess) }
-			try await EudiWallet.authorizedAction(action: action, disabled: !userAuthenticationRequired, dismiss: { onCancel?()}, localizedReason: NSLocalizedString("authenticate_to_share_data", comment: "") )
-			await MainActor.run {status = .responseSent }
+            let response = userAccepted ? PresentationResponse.accepted(itemsToSend: itemsToSend) : .denied
+            let action = { [ weak self] in
+                let url = try await self?.presentationService.sendResponse(response)
+                onSuccess?(url)
+            }
+			try await EudiWallet.authorizedAction(action: action, disabled: !userAuthenticationRequired, dismiss: { onCancel?() }, localizedReason: NSLocalizedString("authenticate_to_share_data", comment: "") )
+			await MainActor.run { status = .responseSent }
 		} catch { await setError(error) }
 	}
 	

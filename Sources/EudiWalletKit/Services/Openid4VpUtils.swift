@@ -74,42 +74,85 @@ class Openid4VpUtils {
 		return CBOR.array([.byteString(clientIdHash), .byteString(responseUriHash), .utf8String(nonce)])
 	}
 	
-	static func generateMdocGeneratedNonce() -> String {
-		var bytes = [UInt8](repeating: 0, count: 16)
-		let result = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-		if result != errSecSuccess {
-			logger.warning("Problem generating random bytes with SecRandomCopyBytes")
-			bytes = (0 ..< 16).map { _ in UInt8.random(in: UInt8.min ... UInt8.max) }
-		}
-		return Data(bytes).base64URLEncodedString()
-	}
-	
-	/// Parse mDoc request from presentation definition (Presentation Exchange 2.0.0 protocol)
-	static func parsePresentationDefinition(_ presentationDefinition: PresentationDefinition, logger: Logger? = nil) throws -> RequestItems? {
-		let pathRx = try NSRegularExpression(pattern: "\\$\\['([^']+)'\\]\\['([^']+)'\\]", options: .caseInsensitive)
-		var res = RequestItems()
-		for inputDescriptor in presentationDefinition.inputDescriptors {
-			guard let fc = inputDescriptor.formatContainer else { logger?.warning("Input descriptor with id \(inputDescriptor.id) is invalid "); continue }
-			guard fc.formats.contains(where: { $0["designation"].string?.lowercased() == "mso_mdoc" }) else { logger?.warning("Input descriptor with id \(inputDescriptor.id) does not contain format mso_mdoc "); continue }
-			let docType = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
-			let kvs: [(String, String)] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePath($0, pathRx: pathRx) }
-			let nsItems = Dictionary(grouping: kvs, by: \.0).mapValues { $0.map(\.1) }
-			if !nsItems.isEmpty { res[docType] = nsItems }
-		}
-		return res
-	}
-
-	static func parsePath(_ path: String, pathRx: NSRegularExpression) -> (String, String)? {
-		guard let match = pathRx.firstMatch(in: path, options: [], range: NSRange(location: 0, length: path.utf16.count)) else { return nil }
-		let r1 = match.range(at:1);
-		let r1l = path.index(path.startIndex, offsetBy: r1.location)
-		let r1r = path.index(r1l, offsetBy: r1.length)
-		let r2 = match.range(at: 2)
-		let r2l = path.index(path.startIndex, offsetBy: r2.location)
-		let r2r = path.index(r2l, offsetBy: r2.length)
-		return (String(path[r1l..<r1r]), String(path[r2l..<r2r]))
-	}
-	
+    static func generateMdocGeneratedNonce() -> String {
+        var bytes = [UInt8](repeating: 0, count: 16)
+        let result = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        if result != errSecSuccess {
+            logger.warning("Problem generating random bytes with SecRandomCopyBytes")
+            bytes = (0 ..< 16).map { _ in UInt8.random(in: UInt8.min ... UInt8.max) }
+        }
+        return Data(bytes).base64URLEncodedString()
+    }
+    
+    /// Parse mDoc request from presentation definition (Presentation Exchange 2.0.0 protocol)
+    static func parsePresentationDefinition(_ presentationDefinition: PresentationDefinition, logger: Logger? = nil) throws -> RequestItems? {
+        // TODO: Use SiopOpenID4VP.match(presentationDefinition:)
+        let pathRx = try NSRegularExpression(pattern: "\\$\\['([^']+)'\\]\\['([^']+)'\\]", options: .caseInsensitive)
+        var res = RequestItems()
+        for inputDescriptor in presentationDefinition.inputDescriptors {
+            guard let fc = inputDescriptor.formatContainer else { logger?.warning("Input descriptor with id \(inputDescriptor.id) is invalid "); continue }
+            // TODO: Support vc+sd-jwt here. Or actually, allow all formats here.
+            guard fc.formats.contains(where: { $0["designation"].string?.lowercased() == "mso_mdoc" }) else { logger?.warning("Input descriptor with id \(inputDescriptor.id) does not contain format mso_mdoc "); continue }
+            let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            let kvs: [(String, String)] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePath($0, pathRx: pathRx) }
+            let nsItems = Dictionary(grouping: kvs, by: \.0).mapValues { $0.map(\.1) }
+            if !nsItems.isEmpty { res[inputDescriptorId] = nsItems }
+        }
+        return res
+    }
+    
+    static func parsePath(_ path: String, pathRx: NSRegularExpression) -> (String, String)? {
+        guard let match = pathRx.firstMatch(in: path, options: [], range: NSRange(location: 0, length: path.utf16.count)) else { return nil }
+        let r1 = match.range(at:1);
+        let r1l = path.index(path.startIndex, offsetBy: r1.location)
+        let r1r = path.index(r1l, offsetBy: r1.length)
+        let r2 = match.range(at: 2)
+        let r2l = path.index(path.startIndex, offsetBy: r2.location)
+        let r2r = path.index(r2l, offsetBy: r2.length)
+        return (String(path[r1l..<r1r]), String(path[r2l..<r2r]))
+    }
+    
+    static func parseFormatContainer(_ formatContainer: FormatContainer) -> Set<ClaimFormat> {
+        let formats = formatContainer.formats.compactMap { json -> ClaimFormat? in
+            guard let designation = json["designation"].string else { return nil }
+            return ClaimFormat(formatIdentifier: designation.lowercased())
+        }
+        return Set(formats)
+    }
+    
+    // TODO: What format should the VP be in? The verifier is required (https://openid.github.io/OpenID4VP/openid-4-verifiable-presentations-wg-draft.html#section-9.1-2.2) to provide metadata about their supported `vp_formats`. We now base the format of the input descriptor based on code from the wallet kit
+    static func determineVerfiablePresentationFormat(availableDocumentFormats: Set<ClaimFormat>, supportedDataFormatsByVerifier: Set<ClaimFormat>, walletSupportedDataFormats: Set<ClaimFormat>, presentationDefinition: PresentationDefinition, inputDescriptor: InputDescriptor) throws -> ClaimFormat {
+        
+        let usableDataFormats = supportedDataFormatsByVerifier.intersection(walletSupportedDataFormats)
+        guard !usableDataFormats.isEmpty else { throw PresentationSession.makeError(str: "No common data formats") }
+        
+        let requestedFormats: Set<ClaimFormat>
+        if let inputDescriptorFormat = inputDescriptor.formatContainer {
+            requestedFormats = parseFormatContainer(inputDescriptorFormat)
+        } else if let presentationDefinitionFormat = presentationDefinition.formatContainer {
+            requestedFormats = parseFormatContainer(presentationDefinitionFormat)
+        } else {
+            requestedFormats = []
+        }
+        
+        guard supportedDataFormatsByVerifier.isSuperset(of: requestedFormats) else {
+            throw PresentationSession.makeError(str: "Verifier requested formats it does not support itself")
+        }
+        
+        if requestedFormats.isEmpty {
+            let availableSupportedFormats = availableDocumentFormats.intersection(supportedDataFormatsByVerifier)
+            guard !availableSupportedFormats.isEmpty else {
+                throw PresentationSession.makeError(str: "Verifier does not support any of the formats we have")
+            }
+            return availableSupportedFormats.first!
+        } else {
+            let availableRequestedFormats = availableDocumentFormats.intersection(requestedFormats)
+            guard !availableDocumentFormats.isEmpty else {
+                throw PresentationSession.makeError(str: "Verifier requested a format we do not have")
+            }
+            return availableRequestedFormats.first!
+        }
+    }
 }
 
 extension ECCurveType {

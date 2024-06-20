@@ -28,6 +28,15 @@
       }
     },
     {
+      "identity" : "eudi-lib-ios-iso18013-data-transfer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TICESoftware/eudi-lib-ios-iso18013-data-transfer.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "6a297261497be82753f61901d7b94fd31d680bd9"
+      }
+    },
+    {
       "identity" : "eudi-lib-ios-iso18013-security",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-iso18013-security.git",
@@ -39,28 +48,28 @@
     {
       "identity" : "eudi-lib-ios-openid4vci-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-openid4vci-swift.git",
+      "location" : "https://github.com/TICESoftware/eudi-lib-ios-openid4vci-swift.git",
       "state" : {
-        "revision" : "92513586f525c1fe78401d76036b540eac792cba",
-        "version" : "0.1.2"
+        "branch" : "main",
+        "revision" : "60c7b2d0b03803795c38b5459fba79420b78fa8b"
       }
     },
     {
       "identity" : "eudi-lib-ios-presentation-exchange-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-presentation-exchange-swift.git",
+      "location" : "https://github.com/TICESoftware/eudi-lib-ios-presentation-exchange-swift.git",
       "state" : {
-        "revision" : "2c5486e3c3e38dab5018445af545677b62e9a712",
-        "version" : "0.0.43"
+        "branch" : "main",
+        "revision" : "dbd242057609ef67d1214fd79d34b352020344b0"
       }
     },
     {
       "identity" : "eudi-lib-ios-siop-openid4vp-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-siop-openid4vp-swift.git",
+      "location" : "https://github.com/TICESoftware/eudi-lib-ios-siop-openid4vp-swift.git",
       "state" : {
-        "revision" : "0423c93112b9b2b11a1e202addf02a93f88d3e96",
-        "version" : "0.1.1"
+        "branch" : "main",
+        "revision" : "86eb8cfac99cfe96ab0c5fba0338da8ec638231f"
       }
     },
     {
@@ -70,6 +79,15 @@
       "state" : {
         "revision" : "ba9ba8b2b889638d3a4b62358c741b34291848da",
         "version" : "0.2.0"
+      }
+    },
+    {
+      "identity" : "eudi-lib-sdjwt-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "b675d15c8b2437bd6b9a2aaeac3333983bdc7bfe"
       }
     },
     {
@@ -149,8 +167,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-certificates.git",
       "state" : {
-        "revision" : "83640c8097acaec17c9835a083e89678cb0f2b66",
-        "version" : "1.3.0"
+        "revision" : "4688f242811d21a9c7a8ad669b3bc5b336759929",
+        "version" : "1.4.0"
       }
     },
     {
@@ -212,8 +230,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyJSON/SwiftyJSON.git",
       "state" : {
-        "revision" : "2b6054efa051565954e1d2b9da831680026cd768",
-        "version" : "4.3.0"
+        "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
+        "version" : "5.0.2"
       }
     }
   ],

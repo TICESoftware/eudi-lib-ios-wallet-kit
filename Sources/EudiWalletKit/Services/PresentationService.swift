@@ -18,7 +18,13 @@ import Foundation
 import MdocDataTransfer18013
 
 /// [Doc Types to [Namespace to Items]] dictionary
-public typealias RequestItems = [String: [String: [String]]]
+public typealias NamespaceToItems = [String: [String]]
+public typealias RequestItems = [String: NamespaceToItems]
+
+public enum PresentationResponse {
+    case accepted(itemsToSend: RequestItems)
+    case denied
+}
 
 /// Presentation service abstract protocol
 public protocol PresentationService {
@@ -34,9 +40,9 @@ public protocol PresentationService {
     func receiveRequest(uri: URL) async throws -> [String: Any]
 	/// Send response to verifier
 	/// - Parameters:
-	///   - userAccepted: True if user accepted to send the response
-	///   - itemsToSend: The selected items to send organized in document types and namespaces (see ``RequestItems``)
-	func sendResponse(userAccepted: Bool, itemsToSend: RequestItems, onSuccess: ((URL?) -> Void)?) async throws
+    ///   - response: Either .accepted(itemsToSend) if the user accepted to send the response including the items (organized in document types and namespaces (see ``RequestItems``)) to be sent or .denied
+    /// - Returns: Optional URL to redirect the user to
+    func sendResponse(_ response: PresentationResponse) async throws -> URL?
 }
 
 
