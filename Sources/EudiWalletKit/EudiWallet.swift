@@ -109,6 +109,7 @@ public final class EudiWallet: ObservableObject {
 		let docTypeToSave = docType ?? (format == .cbor ? iss?.issuerAuth.mso.docType ?? deviceResponse?.documents?.first?.docType : nil)
 		var dataToSave: Data? = data
 		if let deviceResponse {
+            // TODO: we need to save all documents, not only the first
 			if let iss = deviceResponse.documents?.first?.issuerSigned { dataToSave = Data(iss.encode(options: CBOROptions())) } else { dataToSave = nil }
 		}
 		guard let docTypeToSave else { throw WalletError(description: "Unknown document type") }

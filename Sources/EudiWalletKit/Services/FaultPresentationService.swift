@@ -43,5 +43,7 @@ public class FaultPresentationService: PresentationService {
 		throw error
 	}
 	
-	
+    public func sendResponse(_ response: PresentationResponse) async throws -> URL? {
+        throw error
+    }
 }
