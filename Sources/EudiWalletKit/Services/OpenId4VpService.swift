@@ -52,12 +52,14 @@ public class OpenId4VpService: PresentationService {
 	var readerAuthValidated: Bool = false
 	var readerCertificateIssuer: String?
 	var readerCertificateValidationMessage: String?
-    
-    init(state: MDocPresentationState, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?) throws {
+    var urlSession: URLSession
+
+    init(state: MDocPresentationState, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?, urlSession: URLSession) throws {
         self.state = state
         self.flow = .openID4VPOverHTTP
         self.openId4VpVerifierApiUri = openId4VpVerifierApiUri
 		self.openId4VpVerifierLegalName = openId4VpVerifierLegalName
+        self.urlSession = urlSession
     }
 	
 	public func startQrEngagement() async throws -> String? { nil }
@@ -226,9 +228,9 @@ public class OpenId4VpService: PresentationService {
 		if let verifierApiUrl, let verifierLegalName {
 			let verifierMetaData = PreregisteredClient(clientId: "Verifier", legalName: verifierLegalName, jarSigningAlg: JWSAlgorithm(.RS256), jwkSetSource: WebKeySource.fetchByReference(url: URL(string: "\(verifierApiUrl)/wallet/public-keys.json")!))
 			supportedClientIdSchemes += [.preregistered(clients: [verifierMetaData.clientId: verifierMetaData])]
-	  }
-		let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: []) // TODO: Fill vpFormatsSupported
-		return res
+        }
+        let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [], session: urlSession) // TODO: Fill vpFormatsSupported
+        return res
 	}
 	
 }
