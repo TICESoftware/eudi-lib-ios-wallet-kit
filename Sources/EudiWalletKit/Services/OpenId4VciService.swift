@@ -134,7 +134,7 @@ public class OpenId4VCIService: NSObject {
 		let issuerMetadata = await CredentialIssuerMetadataResolver(fetcher: Fetcher(session: urlSession)).resolve(source: .credentialIssuer(credentialIssuerIdentifier))
 		switch issuerMetadata {
 		case .success(let metaData):
-			if let authorizationServer = metaData?.authorizationServers.first, let metaData {
+			if let authorizationServer = metaData?.authorizationServers?.first, let metaData {
 				let authServerMetadata = await AuthorizationServerMetadataResolver(oidcFetcher: Fetcher(session: urlSession), oauthFetcher: Fetcher(session: urlSession)).resolve(url: authorizationServer)
 				let (credentialConfigurationIdentifier, _) = try getCredentialIdentifier(credentialsSupported: metaData.credentialsSupported, docType: docType, format: format)
 				let offer = try CredentialOffer(credentialIssuerIdentifier: credentialIssuerIdentifier, credentialIssuerMetadata: metaData, credentialConfigurationIdentifiers: [credentialConfigurationIdentifier], grants: nil, authorizationServerMetadata: try authServerMetadata.get())
@@ -227,7 +227,7 @@ public class OpenId4VCIService: NSObject {
 			switch unAuthorized {
 			case .success(let request):
 				let authorizedRequest = await issuer.requestAccessToken(authorizationCode: request)
-				if case let .success(authorized) = authorizedRequest, case let .noProofRequired(token, _, _) = authorized {
+                if case let .success(authorized) = authorizedRequest, case let .noProofRequired(token, _, _, _) = authorized {
 					logger.info("--> [AUTHORIZATION] Authorization code exchanged with access token : \(token.accessToken)")
 					return authorized
 				}

@@ -19,6 +19,15 @@
       }
     },
     {
+      "identity" : "cryptoswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/CryptoSwift.git",
+      "state" : {
+        "revision" : "c9c3df6ab812de32bae61fc0cd1bf6d45170ebf0",
+        "version" : "1.8.2"
+      }
+    },
+    {
       "identity" : "eudi-lib-ios-iso18013-data-model",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-iso18013-data-model.git",
@@ -50,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-openid4vci-swift.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "60c7b2d0b03803795c38b5459fba79420b78fa8b"
+        "revision" : "c7fa372fff466f5fc3d923ab01b5e97f07a0e3b6",
+        "version" : "0.4.2"
       }
     },
     {
@@ -60,7 +69,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-presentation-exchange-swift.git",
       "state" : {
         "branch" : "main",
-        "revision" : "dbd242057609ef67d1214fd79d34b352020344b0"
+        "revision" : "85b9a3e3274efceca49b16f25c5498d0d7b8b752"
       }
     },
     {
@@ -75,7 +84,7 @@
     {
       "identity" : "eudi-lib-ios-wallet-storage",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-wallet-storage.git",
+      "location" : "https://github.com/TICESoftware/eudi-lib-ios-wallet-storage.git",
       "state" : {
         "revision" : "ba9ba8b2b889638d3a4b62358c741b34291848da",
         "version" : "0.2.0"
@@ -87,7 +96,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
       "state" : {
         "branch" : "main",
-        "revision" : "b675d15c8b2437bd6b9a2aaeac3333983bdc7bfe"
+        "revision" : "b33276d7648f22d36a255a9bb544a60401cf1eee"
       }
     },
     {
@@ -97,6 +106,15 @@
       "state" : {
         "revision" : "1a415afbf026005e77d32b536fa8d26c1b29e59f",
         "version" : "0.4.138"
+      }
+    },
+    {
+      "identity" : "jose-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/beatt83/jose-swift.git",
+      "state" : {
+        "revision" : "bde54fd4760dd569f5d384c825ae245fd4439670",
+        "version" : "3.2.0"
       }
     },
     {
@@ -124,6 +142,15 @@
       "state" : {
         "revision" : "3bfd2737b700b9a36565a8c94f4ad2b050a5e574",
         "version" : "1.0.1"
+      }
+    },
+    {
+      "identity" : "secp256k1.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GigaBitcoin/secp256k1.swift.git",
+      "state" : {
+        "revision" : "4c77c7384768acf1093d66ccaacf298d322b10b7",
+        "version" : "0.15.0"
       }
     },
     {
@@ -230,8 +257,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyJSON/SwiftyJSON.git",
       "state" : {
-        "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
-        "version" : "5.0.2"
+        "revision" : "2b6054efa051565954e1d2b9da831680026cd768",
+        "version" : "4.3.0"
       }
     }
   ],
