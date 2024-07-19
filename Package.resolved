@@ -86,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-wallet-storage.git",
       "state" : {
-        "revision" : "ba9ba8b2b889638d3a4b62358c741b34291848da",
-        "version" : "0.2.0"
+        "revision" : "dc9f7cfd0012898214313b1e2cf2225ddbae1cb0",
+        "version" : "0.2.1"
       }
     },
     {
