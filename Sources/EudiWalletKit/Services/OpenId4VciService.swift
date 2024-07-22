@@ -76,6 +76,7 @@ public class OpenId4VCIService: NSObject {
 		try initSecurityKeys(useSecureEnclave)
 		let str = try await issueByDocType(docType, format: format)
 		guard let data = Data(base64URLEncoded: str) else { throw OpenId4VCIError.dataNotValid }
+        logger.info("We received a document: \(str)")
 		return data
 	}
 	
@@ -98,7 +99,19 @@ public class OpenId4VCIService: NSObject {
 	}
 	
 	public func getIssuer(offer: CredentialOffer) throws -> Issuer {
-		try Issuer(authorizationServerMetadata: offer.authorizationServerMetadata, issuerMetadata: offer.credentialIssuerMetadata, config: config, parPoster: Poster(session: urlSession), tokenPoster: Poster(session: urlSession), requesterPoster: Poster(session: urlSession), deferredRequesterPoster: Poster(session: urlSession), notificationPoster: Poster(session: urlSession))
+        let publicKeyJWK = try ECPublicKey(publicKey: publicKey,additionalParameters: ["alg": alg.name, "use": "sig", "kid": UUID().uuidString])
+        let dpopConstructor = DPoPConstructor(algorithm: alg, jwk: publicKeyJWK, privateKey: privateKey)
+        return try Issuer(
+            authorizationServerMetadata: offer.authorizationServerMetadata,
+            issuerMetadata: offer.credentialIssuerMetadata,
+            config: config,
+            parPoster: Poster(session: urlSession),
+            tokenPoster: Poster(session: urlSession),
+            requesterPoster: Poster(session: urlSession),
+            deferredRequesterPoster: Poster(session: urlSession),
+            notificationPoster: Poster(session: urlSession),
+            dpopConstructor: dpopConstructor
+        )
 	}
 	
 	public func issueDocumentsByOfferUrl(offerUri: String, docTypes: [OfferedDocModel], txCodeValue: String?, format: DataFormat, useSecureEnclave: Bool = true, claimSet: ClaimSet? = nil) async throws -> [Data] {
@@ -230,17 +243,30 @@ public class OpenId4VCIService: NSObject {
 		if case let .success(request) = parPlaced, case let .par(parRequested) = request {
 			logger.info("--> [AUTHORIZATION] Placed PAR. Get authorization code URL is: \(parRequested.getAuthorizationCodeURL)")
             
-            let authorizationCode = try await authorizationService.getAuthorizationCode(requestURL: parRequested.getAuthorizationCodeURL.url) ?? { throw WalletError(description: "Could not retrieve authorization code") }()
+            let (authorizationCode, nonce) = try await authorizationService.getAuthorizationCode(requestURL: parRequested.getAuthorizationCodeURL.url)
+            
+            guard let authorizationCode, let nonce else {
+                throw WalletError(description: "Could not retrieve authorization code")
+            }
             
 			logger.info("--> [AUTHORIZATION] Authorization code retrieved")
 			let unAuthorized = await issuer.handleAuthorizationCode(parRequested: request, authorizationCode: .authorizationCode(authorizationCode: authorizationCode))
 			switch unAuthorized {
 			case .success(let request):
-				let authorizedRequest = await issuer.requestAccessToken(authorizationCode: request)
-                if case let .success(authorized) = authorizedRequest, case let .noProofRequired(token, _, _, _) = authorized {
-					logger.info("--> [AUTHORIZATION] Authorization code exchanged with access token : \(token.accessToken)")
-					return authorized
-				}
+                let authorizedRequest = await issuer.requestAccessToken(authorizationCode: request, nonce: nonce)
+                switch authorizedRequest {
+                case .success(let authorized):
+                    switch authorized {
+                    case .noProofRequired(let accessToken, _, _):
+                        logger.info("--> [AUTHORIZATION] Authorization code exchanged with access token (no proof required) : \(accessToken)")
+                        return authorized
+                    case .proofRequired(let accessToken, _, _, _, _):
+                        logger.info("--> [AUTHORIZATION] Authorization code exchanged with access token (proof required) : \(accessToken)")
+                        return authorized
+                    }
+                case .failure(let failure):
+                    throw WalletError(description: "Failed to request access token: \(failure.localizedDescription)")
+                }
 			case .failure(let error):
 				throw  WalletError(description: error.localizedDescription)
 			}
@@ -312,7 +338,7 @@ public class OpenId4VCIService: NSObject {
 	
 	private func deferredCredentialUseCase(issuer: Issuer, authorized: AuthorizedRequest, transactionId: TransactionId) async throws -> String {
 		logger.info("--> [ISSUANCE] Got a deferred issuance response from server with transaction_id \(transactionId.value). Retrying issuance...")
-		let deferredRequestResponse = try await issuer.requestDeferredIssuance(proofRequest: authorized, transactionId: transactionId)
+		let deferredRequestResponse = try await issuer.requestDeferredIssuance(proofRequest: authorized, transactionId: transactionId, dpopNonce: nil) // TODO: Do we need to do a dpop here?
 		switch deferredRequestResponse {
 		case .success(let response):
 			switch response {

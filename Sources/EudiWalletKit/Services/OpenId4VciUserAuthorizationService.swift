@@ -8,7 +8,7 @@ public protocol OpenId4VciUserAuthorizationService {
     var logger: Logger { get }
     
     @MainActor
-    func getAuthorizationCode(requestURL: URL) async throws -> String?
+    func getAuthorizationCode(requestURL: URL) async throws -> (String?, DPopNonce?)
 }
 
 public class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUserAuthorizationService, ASWebAuthenticationPresentationContextProviding {
@@ -21,14 +21,14 @@ public class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUser
     }
     
     @MainActor
-    public func getAuthorizationCode(requestURL: URL) async throws -> String? {
+    public func getAuthorizationCode(requestURL: URL) async throws -> (String?, DPopNonce?) {
         logger.info("--> [AUTHORIZATION] Retrieving Authorization Code using default AuthorizationService with request URL \(requestURL)")
         return try await withCheckedThrowingContinuation { c in
             let authenticationSession = ASWebAuthenticationSession(url: requestURL, callbackURLScheme: config.authFlowRedirectionURI.scheme!) { optionalUrl, optionalError in
                 guard optionalError == nil else { c.resume(throwing: OpenId4VCIError.authRequestFailed(optionalError!)); return }
                 guard let url = optionalUrl else { c.resume(throwing: OpenId4VCIError.authorizeResponseNoUrl); return }
                 guard let code = url.getQueryStringParameter("code") else { c.resume(throwing: OpenId4VCIError.authorizeResponseNoCode); return }
-                c.resume(returning: code)
+                c.resume(returning: (code, nil))
             }
             authenticationSession.prefersEphemeralWebBrowserSession = true
             authenticationSession.presentationContextProvider = self
