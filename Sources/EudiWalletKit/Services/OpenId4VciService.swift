@@ -112,7 +112,17 @@ public class OpenId4VCIService: NSObject {
 		let preAuthorizedCode: String? = code?.preAuthorizedCode
 		let issuer = try getIssuer(offer: offer)
 		if preAuthorizedCode != nil && txCodeSpec != nil && txCodeValue == nil { throw WalletError(description: "A transaction code is required for this offer") }
-		let authorized = if let preAuthorizedCode, let txCodeValue, let authCode = try? IssuanceAuthorization(preAuthorizationCode: preAuthorizedCode, txCode: txCodeSpec) { try await issuer.authorizeWithPreAuthorizationCode(credentialOffer: offer, authorizationCode: authCode, clientId: config.clientId, transactionCode: txCodeValue).get() } else { try await authorizeRequestWithAuthCodeUseCase(issuer: issuer, offer: offer) }
+        let authorized = if let preAuthorizedCode, let txCodeValue, let authCode = try? IssuanceAuthorization(
+            preAuthorizationCode: preAuthorizedCode,
+            txCode: txCodeSpec) {
+                try await issuer.authorizeWithPreAuthorizationCode(credentialOffer: offer,
+                                                                   authorizationCode: authCode,
+                                                                   clientId: config.clientId,
+                                                                   transactionCode: txCodeValue).get()
+            } else {
+                try await authorizeRequestWithAuthCodeUseCase(issuer: issuer,
+                                                              offer: offer)
+            }
 		let data = await credentialInfo.asyncCompactMap {
 			do {
 				logger.info("Starting issuing with identifer \($0.identifier.value) and scope \($0.scope)")
