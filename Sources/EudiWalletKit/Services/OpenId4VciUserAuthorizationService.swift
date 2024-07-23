@@ -3,6 +3,8 @@ import AuthenticationServices
 import Logging
 import OpenID4VCI
 
+public typealias DPopNonce = String
+
 public protocol OpenId4VciUserAuthorizationService {
     var config: OpenId4VCIConfig { get }
     var logger: Logger { get }

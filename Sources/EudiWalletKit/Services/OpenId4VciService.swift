@@ -257,10 +257,10 @@ public class OpenId4VCIService: NSObject {
                 switch authorizedRequest {
                 case .success(let authorized):
                     switch authorized {
-                    case .noProofRequired(let accessToken, _, _):
+                    case .noProofRequired(let accessToken, _, _, _):
                         logger.info("--> [AUTHORIZATION] Authorization code exchanged with access token (no proof required) : \(accessToken)")
                         return authorized
-                    case .proofRequired(let accessToken, _, _, _, _):
+                    case .proofRequired(let accessToken, _, _, _, _, _):
                         logger.info("--> [AUTHORIZATION] Authorization code exchanged with access token (proof required) : \(accessToken)")
                         return authorized
                     }
