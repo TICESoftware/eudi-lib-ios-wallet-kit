@@ -243,17 +243,13 @@ public class OpenId4VCIService: NSObject {
 		if case let .success(request) = parPlaced, case let .par(parRequested) = request {
 			logger.info("--> [AUTHORIZATION] Placed PAR. Get authorization code URL is: \(parRequested.getAuthorizationCodeURL)")
             
-            let (authorizationCode, nonce) = try await authorizationService.getAuthorizationCode(requestURL: parRequested.getAuthorizationCodeURL.url)
-            
-            guard let authorizationCode, let nonce else {
-                throw WalletError(description: "Could not retrieve authorization code")
-            }
+            let authorizationResponse = try await authorizationService.getAuthorizationCode(requestURL: parRequested.getAuthorizationCodeURL.url)
             
 			logger.info("--> [AUTHORIZATION] Authorization code retrieved")
-			let unAuthorized = await issuer.handleAuthorizationCode(parRequested: request, authorizationCode: .authorizationCode(authorizationCode: authorizationCode))
+            let unAuthorized = await issuer.handleAuthorizationCode(parRequested: request, authorizationCode: .authorizationCode(authorizationCode: authorizationResponse.authorizationCode))
 			switch unAuthorized {
 			case .success(let request):
-                let authorizedRequest = await issuer.requestAccessToken(authorizationCode: request, nonce: nonce)
+                let authorizedRequest = await issuer.requestAccessToken(authorizationCode: request, nonce: authorizationResponse.dpopNonce)
                 switch authorizedRequest {
                 case .success(let authorized):
                     switch authorized {
@@ -338,7 +334,7 @@ public class OpenId4VCIService: NSObject {
 	
 	private func deferredCredentialUseCase(issuer: Issuer, authorized: AuthorizedRequest, transactionId: TransactionId) async throws -> String {
 		logger.info("--> [ISSUANCE] Got a deferred issuance response from server with transaction_id \(transactionId.value). Retrying issuance...")
-		let deferredRequestResponse = try await issuer.requestDeferredIssuance(proofRequest: authorized, transactionId: transactionId, dpopNonce: nil) // TODO: Do we need to do a dpop here?
+        let deferredRequestResponse = try await issuer.requestDeferredIssuance(proofRequest: authorized, transactionId: transactionId, dpopNonce: authorized.dpopNonce)
 		switch deferredRequestResponse {
 		case .success(let response):
 			switch response {

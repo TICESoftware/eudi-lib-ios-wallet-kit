@@ -5,12 +5,21 @@ import OpenID4VCI
 
 public typealias DPopNonce = String
 
+public struct VciUserAuthorizationServiceResponse {
+    public init(authorizationCode: String, dpopNonce: DPopNonce? = nil) {
+        self.authorizationCode = authorizationCode
+        self.dpopNonce = dpopNonce
+    }
+    var authorizationCode: String
+    var dpopNonce: DPopNonce?
+}
+
 public protocol OpenId4VciUserAuthorizationService {
     var config: OpenId4VCIConfig { get }
     var logger: Logger { get }
     
     @MainActor
-    func getAuthorizationCode(requestURL: URL) async throws -> (String?, DPopNonce?)
+    func getAuthorizationCode(requestURL: URL) async throws -> VciUserAuthorizationServiceResponse
 }
 
 public class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUserAuthorizationService, ASWebAuthenticationPresentationContextProviding {
@@ -23,14 +32,14 @@ public class OpenId4VciUserAuthorizationServiceDefault: NSObject, OpenId4VciUser
     }
     
     @MainActor
-    public func getAuthorizationCode(requestURL: URL) async throws -> (String?, DPopNonce?) {
+    public func getAuthorizationCode(requestURL: URL) async throws -> VciUserAuthorizationServiceResponse {
         logger.info("--> [AUTHORIZATION] Retrieving Authorization Code using default AuthorizationService with request URL \(requestURL)")
         return try await withCheckedThrowingContinuation { c in
             let authenticationSession = ASWebAuthenticationSession(url: requestURL, callbackURLScheme: config.authFlowRedirectionURI.scheme!) { optionalUrl, optionalError in
                 guard optionalError == nil else { c.resume(throwing: OpenId4VCIError.authRequestFailed(optionalError!)); return }
                 guard let url = optionalUrl else { c.resume(throwing: OpenId4VCIError.authorizeResponseNoUrl); return }
                 guard let code = url.getQueryStringParameter("code") else { c.resume(throwing: OpenId4VCIError.authorizeResponseNoCode); return }
-                c.resume(returning: (code, nil))
+                c.resume(returning: .init(authorizationCode: code))
             }
             authenticationSession.prefersEphemeralWebBrowserSession = true
             authenticationSession.presentationContextProvider = self
