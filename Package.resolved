@@ -59,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-openid4vci-swift.git",
       "state" : {
-        "revision" : "c7fa372fff466f5fc3d923ab01b5e97f07a0e3b6",
-        "version" : "0.4.2"
+        "branch" : "main",
+        "revision" : "5083df206370330391be4789bc6a2d80ba4462f9"
       }
     },
     {
