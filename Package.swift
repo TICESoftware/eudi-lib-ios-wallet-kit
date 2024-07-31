@@ -19,7 +19,7 @@ let package = Package(
         .package(url: "https://github.com/TICESoftware/eudi-lib-ios-wallet-storage.git", exact: "0.2.1"),
         .package(url: "https://github.com/TICESoftware/eudi-lib-ios-siop-openid4vp-swift.git", branch: "main"),
         .package(url: "https://github.com/TICESoftware/eudi-lib-ios-openid4vci-swift.git", branch: "main"),
-        .package(url: "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git", branch: "main"),
+        .package(url: "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git", branch: "certificate_chain"),
 	],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -31,6 +31,10 @@ let package = Package(
 				.product(name: "SiopOpenID4VP", package: "eudi-lib-ios-siop-openid4vp-swift"),
 				.product(name: "OpenID4VCI", package: "eudi-lib-ios-openid4vci-swift"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(
+                  name: "eudi-lib-sdjwt-swift",
+                  package: "eudi-lib-sdjwt-swift"
+                )
             ]
         ),
         .testTarget(

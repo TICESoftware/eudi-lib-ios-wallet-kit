@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "b33276d7648f22d36a255a9bb544a60401cf1eee"
+        "branch" : "certificate_chain",
+        "revision" : "f249c3a3a4c5b39b22b5484151312003ea48a803"
       }
     },
     {
@@ -111,10 +111,10 @@
     {
       "identity" : "jose-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/beatt83/jose-swift.git",
+      "location" : "https://github.com/TICESoftware/jose-swift",
       "state" : {
-        "revision" : "bde54fd4760dd569f5d384c825ae245fd4439670",
-        "version" : "3.2.0"
+        "branch" : "certificate_chain",
+        "revision" : "1fa5cf32e0956b2173c3108d0ac898cfa4a891fb"
       }
     },
     {
