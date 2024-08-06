@@ -23,6 +23,7 @@ import Logging
 import CryptoKit
 import Security
 import WalletStorage
+import eudi_lib_sdjwt_swift
 
 public class OpenId4VCIService: NSObject {
 	let issueReq: IssueRequest
@@ -65,20 +66,56 @@ public class OpenId4VCIService: NSObject {
 		let publicKeyJWK = try ECPublicKey(publicKey: publicKey,additionalParameters: ["alg": alg.name, "use": "sig", "kid": UUID().uuidString])
 		bindingKey = .jwk(algorithm: alg, jwk: publicKeyJWK, privateKey: privateKey, issuer: config.clientId)
 	}
-	
-	/// Issue a document with the given `docType` using OpenId4Vci protocol
-	/// - Parameters:
-	///   - docType: the docType of the document to be issued
-	///   - format: format of the exchanged data
-	///   - useSecureEnclave: use secure enclave to protect the private key
-	/// - Returns: The data of the document
-	public func issueDocument(docType: String, format: DataFormat, useSecureEnclave: Bool = true) async throws -> Data {
-		try initSecurityKeys(useSecureEnclave)
-		let str = try await issueByDocType(docType, format: format)
-		guard let data = Data(base64URLEncoded: str) else { throw OpenId4VCIError.dataNotValid }
-        logger.info("We received a document: \(str)")
-		return data
-	}
+    
+    /// Issue a document with DataFormat Cbor and Sdjwt with the given `docType` using OpenId4Vci protocol
+    /// - Parameters:
+    ///   - docType: the docType of the document to be issued
+    ///   - useSecureEnclave: use secure enclave to protect the private key
+    /// - Returns: The data of the document
+    public func issueDocument(docType: String, useSecureEnclave: Bool = true) async throws -> (Data, SignedSDJWT) {
+        try initSecurityKeys(useSecureEnclave)
+        let (sdjwtString, mdocString) = try await issueByDocType(docType)
+        guard let mdocData = Data(base64URLEncoded: mdocString) else {
+            throw OpenId4VCIError.dataNotValid
+        }
+        logger.info("We received a mdoc document: \(mdocData)")
+        
+        let parser = CompactParser(serialisedString: sdjwtString)
+        let verifier = try SDJWTVerifier(parser: parser)
+        
+        let result = try verifier.verifyIssuance { jws in
+            let caCert = jws.protectedHeader.x509CertificateChain?.first
+            let secKey = try createSecKeyFromCertificate(caCert!)
+            return try SignatureVerifier(signedJWT: jws, publicKey: secKey)
+        }
+        let sdjwt = try result.get()
+        logger.info("We received a sdjwt document: \(String(describing: sdjwt))")
+        return (mdocData, sdjwt)
+    }
+    
+    private func createSecKeyFromCertificate(_ certificateString: String) throws -> SecKey {
+        guard let certificateData = Data(base64Encoded: certificateString) else {
+            throw WalletError(description: "Failed to convert certificate string to data")
+        }
+        
+        guard let certificate = SecCertificateCreateWithData(nil, certificateData as CFData) else {
+            throw WalletError(description: "Failed to create SecCertificate")
+        }
+        
+        var trust: SecTrust?
+        let policy = SecPolicyCreateBasicX509()
+        let status = SecTrustCreateWithCertificates(certificate, policy, &trust)
+        
+        guard status == errSecSuccess, let trust = trust else {
+            throw WalletError(description: "Failed to create SecTrust")
+        }
+        
+        guard let publicKey = SecTrustCopyPublicKey(trust) else {
+            throw WalletError(description: "Failed to copy public key")
+        }
+        
+        return publicKey
+    }
 	
 	/// Resolve issue offer and return available document metadata
 	/// - Parameters:
@@ -91,7 +128,7 @@ public class OpenId4VCIService: NSObject {
 		case .success(let offer):
 			let code: Grants.PreAuthorizedCode? = switch offer.grants {	case .preAuthorizedCode(let preAuthorizedCode):	preAuthorizedCode; case .both(_, let preAuthorizedCode):	preAuthorizedCode; case .authorizationCode(_), .none: nil	}
 			Self.metadataCache[uriOffer] = offer
-			let credentialInfo = try getCredentialIdentifiers(credentialsSupported: offer.credentialIssuerMetadata.credentialsSupported.filter { offer.credentialConfigurationIdentifiers.contains($0.key) }, format: format)
+            let credentialInfo = try getCredentialIdentifiers(credentialsSupported: offer.credentialIssuerMetadata.credentialsSupported.filter { offer.credentialConfigurationIdentifiers.contains($0.key) }, format: format)
 			return OfferedIssueModel(issuerName: offer.credentialIssuerIdentifier.url.absoluteString, docModels: credentialInfo.map(\.offered), txCodeSpec:  code?.txCode)
 		case .failure(let error):
 			throw WalletError(description: "Unable to resolve credential offer: \(error.localizedDescription)")
@@ -151,32 +188,58 @@ public class OpenId4VCIService: NSObject {
 		Self.metadataCache.removeValue(forKey: offerUri)
 		return data
 	}
+    
+    func issueByDocType(_ docType: String, claimSet: ClaimSet? = nil) async throws -> (String, String) {
+        let credentialIssuerIdentifier = try CredentialIssuerId(credentialIssuerURL)
+        let issuerMetadata = await CredentialIssuerMetadataResolver(fetcher: Fetcher(session: urlSession)).resolve(source: .credentialIssuer(credentialIssuerIdentifier))
+        switch issuerMetadata {
+        case .success(let metaData):
+            if let authorizationServer = metaData?.authorizationServers?.first, let metaData {
+                let authServerMetadata = await AuthorizationServerMetadataResolver(oidcFetcher: Fetcher(session: urlSession),
+                                                                                   oauthFetcher: Fetcher(session: urlSession))
+                    .resolve(url: authorizationServer)
+                let (credentialConfigurationIdentifierCbor, _) = try getCredentialIdentifier(credentialsSupported: metaData.credentialsSupported,
+                                                                                             docType: docType,
+                                                                                             format: .cbor)
+                let (credentialConfigurationIdentifierSdjwt, _) = try getCredentialIdentifier(credentialsSupported: metaData.credentialsSupported,
+                                                                                             docType: docType,
+                                                                                             format: .sdjwt)
+                
+                let offer = try CredentialOffer(credentialIssuerIdentifier: credentialIssuerIdentifier,
+                                                credentialIssuerMetadata: metaData,
+                                                credentialConfigurationIdentifiers: Array(metaData.credentialsSupported.keys),
+                                                grants: nil,
+                                                authorizationServerMetadata: try authServerMetadata.get())
+                // Authorize with auth code flow
+                let issuer = try getIssuer(offer: offer)
+                let authorized = try await authorizeRequestWithAuthCodeUseCase(issuer: issuer, offer: offer)
+                let (cbor, newCNonce) = try await issueOfferedCredentialInternal(authorized,
+                                                                issuer: issuer,
+                                                                credentialConfigurationIdentifier: credentialConfigurationIdentifierCbor,
+                                                                claimSet: claimSet)
+                guard let newCNonce else {
+                    throw WalletError(description: "No cNonce for sdjwt issuance")
+                }
+                var updatedAuthorized = authorized
+                updatedAuthorized.updateCNonce(newCNonce)
+                let (sdjwt, _) = try await issueOfferedCredentialInternal(updatedAuthorized,
+                                                                     issuer: issuer,
+                                                                     credentialConfigurationIdentifier: credentialConfigurationIdentifierSdjwt,
+                                                                     claimSet: claimSet)
+                return (sdjwt, cbor)
+            } else {
+                throw WalletError(description: "Invalid authorization server")
+            }
+        case .failure:
+            throw WalletError(description: "Invalid issuer metadata")
+        }
+    }
 	
-	func issueByDocType(_ docType: String, format: DataFormat, claimSet: ClaimSet? = nil) async throws -> String {
-		let credentialIssuerIdentifier = try CredentialIssuerId(credentialIssuerURL)
-		let issuerMetadata = await CredentialIssuerMetadataResolver(fetcher: Fetcher(session: urlSession)).resolve(source: .credentialIssuer(credentialIssuerIdentifier))
-		switch issuerMetadata {
-		case .success(let metaData):
-			if let authorizationServer = metaData?.authorizationServers?.first, let metaData {
-				let authServerMetadata = await AuthorizationServerMetadataResolver(oidcFetcher: Fetcher(session: urlSession), oauthFetcher: Fetcher(session: urlSession)).resolve(url: authorizationServer)
-				let (credentialConfigurationIdentifier, _) = try getCredentialIdentifier(credentialsSupported: metaData.credentialsSupported, docType: docType, format: format)
-				let offer = try CredentialOffer(credentialIssuerIdentifier: credentialIssuerIdentifier, credentialIssuerMetadata: metaData, credentialConfigurationIdentifiers: [credentialConfigurationIdentifier], grants: nil, authorizationServerMetadata: try authServerMetadata.get())
-				// Authorize with auth code flow
-				let issuer = try getIssuer(offer: offer)
-				let authorized = try await authorizeRequestWithAuthCodeUseCase(issuer: issuer, offer: offer)
-				return try await issueOfferedCredentialInternal(authorized, issuer: issuer, credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet)
-			} else {
-				throw WalletError(description: "Invalid authorization server")
-			}
-		case .failure:
-			throw WalletError(description: "Invalid issuer metadata")
-		}
-	}
-	
-	private func issueOfferedCredentialInternal(_ authorized: AuthorizedRequest, issuer: Issuer, credentialConfigurationIdentifier: CredentialConfigurationIdentifier, claimSet: ClaimSet?) async throws -> String {
+    private func issueOfferedCredentialInternal(_ authorized: AuthorizedRequest, issuer: Issuer, credentialConfigurationIdentifier: CredentialConfigurationIdentifier, claimSet: ClaimSet?) async throws -> (String, CNonce?) {
 		switch authorized {
 		case .noProofRequired:
-			return try await noProofRequiredSubmissionUseCase(issuer: issuer, noProofRequiredState: authorized, credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet)
+			let result = try await noProofRequiredSubmissionUseCase(issuer: issuer, noProofRequiredState: authorized, credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet)
+            return (result, nil)
 		case .proofRequired:
 			return try await proofRequiredSubmissionUseCase(issuer: issuer, authorized: authorized, credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet)
 		}
@@ -187,7 +250,8 @@ public class OpenId4VCIService: NSObject {
 		guard issuerMetadata.credentialsSupported.keys.contains(where: { $0.value == credentialConfigurationIdentifier.value }) else {
 			throw WalletError(description: "Cannot find credential identifier \(credentialConfigurationIdentifier.value) in offer")
 		}
-		return try await issueOfferedCredentialInternal(authorized, issuer: issuer, credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet)
+        return try await issueOfferedCredentialInternal(authorized, issuer: issuer, credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet).0
+        
 	}
 	
 	func getCredentialIdentifier(credentialsSupported: [CredentialConfigurationIdentifier: CredentialSupported], docType: String, format: DataFormat) throws -> (identifier: CredentialConfigurationIdentifier, scope: String) {
@@ -199,6 +263,13 @@ public class OpenId4VCIService: NSObject {
 			}
 			logger.info("Currently supported cryptographic suites: \(msoMdocConf.credentialSigningAlgValuesSupported)")
 			return (identifier: credential.key, scope: scope)
+        case .sdjwt:
+            guard let credential = credentialsSupported.first(where: { if case .sdJwtVc(let sdJwtCred) = $0.value { true } else { false } }), case let .sdJwtVc(sdJwtConf) = credential.value, let scope = sdJwtConf.scope else {
+                logger.error("No credential for docType \(docType). Currently supported credentials: \(credentialsSupported.values)")
+                throw WalletError(description: "Issuer does not support doc type\(docType)")
+            }
+            logger.info("Currently supported cryptographic suites: \(sdJwtConf.credentialSigningAlgValuesSupported)")
+            return (identifier: credential.key, scope: scope)
 		default:
 			throw WalletError(description: "Format \(format) not yet supported")
 		}
@@ -224,6 +295,13 @@ public class OpenId4VCIService: NSObject {
 			let credentialInfos = credentialsSupported.compactMap {
 				if case .msoMdoc(let msoMdocCred) = $0.value, let scope = msoMdocCred.scope, case let offered = OfferedDocModel(docType: msoMdocCred.docType, displayName: msoMdocCred.display.getName() ?? msoMdocCred.docType) { (identifier: $0.key, scope: scope,offered: offered) } else { nil } }
 			return credentialInfos
+        case .sdjwt:
+            let credentialInfos = credentialsSupported.compactMap {
+                if case .sdJwtVc(let sdJwtCred) = $0.value,
+                   let scope = sdJwtCred.scope,
+                   case let offered = OfferedDocModel(docType: "sdJwtCred.docType",
+                                                      displayName: sdJwtCred.display.getName() ?? "sdJwtCred.docType") { (identifier: $0.key, scope: scope,offered: offered) } else { nil } }
+            return credentialInfos
 		default:
 			throw WalletError(description: "Format \(format) not yet supported")
 		}
@@ -293,7 +371,7 @@ public class OpenId4VCIService: NSObject {
 						throw WalletError(description: "No credential response results available")
 					}
 				case .invalidProof(let cNonce, _):
-					return try await proofRequiredSubmissionUseCase(issuer: issuer, authorized: noProofRequiredState.handleInvalidProof(cNonce: cNonce), credentialConfigurationIdentifier: credentialConfigurationIdentifier)
+                    return try await proofRequiredSubmissionUseCase(issuer: issuer, authorized: noProofRequiredState.handleInvalidProof(cNonce: cNonce), credentialConfigurationIdentifier: credentialConfigurationIdentifier).0
 				case .failed(error: let error):
 					throw WalletError(description: error.localizedDescription)
 				}
@@ -304,7 +382,7 @@ public class OpenId4VCIService: NSObject {
 		}
 	}
 	
-	private func proofRequiredSubmissionUseCase(issuer: Issuer, authorized: AuthorizedRequest, credentialConfigurationIdentifier: CredentialConfigurationIdentifier?, claimSet: ClaimSet? = nil) async throws -> String {
+    private func proofRequiredSubmissionUseCase(issuer: Issuer, authorized: AuthorizedRequest, credentialConfigurationIdentifier: CredentialConfigurationIdentifier?, claimSet: ClaimSet? = nil) async throws -> (String, CNonce?) {
 		guard let credentialConfigurationIdentifier else { throw WalletError(description: "Credential configuration identifier not found") }
 		let payload: IssuanceRequestPayload = .configurationBased(credentialConfigurationIdentifier: credentialConfigurationIdentifier, claimSet: claimSet)
 		let responseEncryptionSpecProvider = { Issuer.createResponseEncryptionSpec($0) }
@@ -316,9 +394,10 @@ public class OpenId4VCIService: NSObject {
 				if let result = response.credentialResponses.first {
 					switch result {
 					case .deferred(let transactionId):
-						return try await deferredCredentialUseCase(issuer: issuer, authorized: authorized, transactionId: transactionId)
+						let deferred = try await deferredCredentialUseCase(issuer: issuer, authorized: authorized, transactionId: transactionId)
+                        return (deferred, response.cNonce)
 					case .issued(_, let credential, _):
-						return credential
+                        return (credential, response.cNonce)
 					}
 				} else {
 					throw WalletError(description: "No credential response results available")
@@ -353,6 +432,7 @@ public class OpenId4VCIService: NSObject {
 
 extension SecureEnclave.P256.KeyAgreement.PrivateKey {
 	
+    
 	func toSecKey() throws -> SecKey {
 		var errorQ: Unmanaged<CFError>?
 		guard let sf = SecKeyCreateWithData(Data() as NSData, [
