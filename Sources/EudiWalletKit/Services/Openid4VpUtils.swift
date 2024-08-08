@@ -87,18 +87,41 @@ class Openid4VpUtils {
     /// Parse mDoc request from presentation definition (Presentation Exchange 2.0.0 protocol)
     static func parsePresentationDefinition(_ presentationDefinition: PresentationDefinition, logger: Logger? = nil) throws -> RequestItems? {
         // TODO: Use SiopOpenID4VP.match(presentationDefinition:)
-        let pathRx = try NSRegularExpression(pattern: "\\$\\['([^']+)'\\]\\['([^']+)'\\]", options: .caseInsensitive)
+        
         var res = RequestItems()
         for inputDescriptor in presentationDefinition.inputDescriptors {
             guard let fc = inputDescriptor.formatContainer else { logger?.warning("Input descriptor with id \(inputDescriptor.id) is invalid "); continue }
             // TODO: Support vc+sd-jwt here. Or actually, allow all formats here.
-            guard fc.formats.contains(where: { $0["designation"].string?.lowercased() == "mso_mdoc" }) else { logger?.warning("Input descriptor with id \(inputDescriptor.id) does not contain format mso_mdoc "); continue }
-            let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
-            let kvs: [(String, String)] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePath($0, pathRx: pathRx) }
-            let nsItems = Dictionary(grouping: kvs, by: \.0).mapValues { $0.map(\.1) }
-            if !nsItems.isEmpty { res[inputDescriptorId] = nsItems }
+            let format = fc.formats.first?["designation"].string?.lowercased()
+            switch format {
+            case "vc+sd-jwt":
+                let pathRx = try NSRegularExpression(pattern: "\\[\"\\$\\.(.*?)\"\\]", options: .caseInsensitive)
+                let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let kvs: [String] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePathSdjwt($0, pathRx: pathRx) }
+                let namespace = inputDescriptor.id
+                let nsItems = [namespace : kvs]
+                if !nsItems.isEmpty { res[inputDescriptorId] = nsItems }
+            case "mso_mdoc":
+                let pathRx = try NSRegularExpression(pattern: "\\$\\['([^']+)'\\]\\['([^']+)'\\]", options: .caseInsensitive)
+                let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                let kvs: [(String, String)] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePath($0, pathRx: pathRx) }
+                let nsItems = Dictionary(grouping: kvs, by: \.0).mapValues { $0.map(\.1) }
+                if !nsItems.isEmpty { res[inputDescriptorId] = nsItems }
+            default:
+                logger?.warning("Input descriptor with id \(inputDescriptor.id) does not contain format mso_mdoc or vc+sd-jwt")
+            }
         }
         return res
+    }
+    
+    static func parsePathSdjwt(_ path: String, pathRx: NSRegularExpression) -> String? {
+        guard let match = pathRx.firstMatch(in: path, options: [], range: NSRange(location: 0, length: path.utf16.count)) else {
+            return nil
+        }
+        let r1 = match.range(at: 1)
+        let r1l = path.index(path.startIndex, offsetBy: r1.location)
+        let r1r = path.index(r1l, offsetBy: r1.length)
+        return String(path[r1l..<r1r])
     }
     
     static func parsePath(_ path: String, pathRx: NSRegularExpression) -> (String, String)? {
