@@ -16,10 +16,10 @@ let package = Package(
 		.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.3"),
         .package(url: "https://github.com/TICESoftware/eudi-lib-ios-iso18013-data-transfer.git", branch: "main"),
-        .package(url: "https://github.com/TICESoftware/eudi-lib-ios-wallet-storage.git", exact: "0.2.1"),
+        .package(url: "https://github.com/TICESoftware/eudi-lib-ios-wallet-storage.git", branch: "main"),
         .package(url: "https://github.com/TICESoftware/eudi-lib-ios-siop-openid4vp-swift.git", branch: "main"),
         .package(url: "https://github.com/TICESoftware/eudi-lib-ios-openid4vci-swift.git", branch: "main"),
-        .package(url: "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git", branch: "certificate_chain"),
+        .package(url: "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git", branch: "main"),
 	],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.

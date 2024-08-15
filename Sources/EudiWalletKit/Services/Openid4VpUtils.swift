@@ -95,9 +95,8 @@ class Openid4VpUtils {
             let format = fc.formats.first?["designation"].string?.lowercased()
             switch format {
             case "vc+sd-jwt":
-                let pathRx = try NSRegularExpression(pattern: "\\[\"\\$\\.(.*?)\"\\]", options: .caseInsensitive)
                 let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
-                let kvs: [String] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePathSdjwt($0, pathRx: pathRx) }
+                let kvs: [String] = inputDescriptor.constraints.fields.compactMap(\.paths.first)
                 let namespace = inputDescriptor.id
                 let nsItems = [namespace : kvs]
                 if !nsItems.isEmpty { res[inputDescriptorId] = nsItems }
@@ -112,16 +111,6 @@ class Openid4VpUtils {
             }
         }
         return res
-    }
-    
-    static func parsePathSdjwt(_ path: String, pathRx: NSRegularExpression) -> String? {
-        guard let match = pathRx.firstMatch(in: path, options: [], range: NSRange(location: 0, length: path.utf16.count)) else {
-            return nil
-        }
-        let r1 = match.range(at: 1)
-        let r1l = path.index(path.startIndex, offsetBy: r1.location)
-        let r1r = path.index(r1l, offsetBy: r1.length)
-        return String(path[r1l..<r1r])
     }
     
     static func parsePath(_ path: String, pathRx: NSRegularExpression) -> (String, String)? {

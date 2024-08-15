@@ -25,17 +25,23 @@ import SiopOpenID4VP
 import JOSESwift
 import Logging
 import X509
+import eudi_lib_sdjwt_swift
+import WalletStorage
 /// Implements remote attestation presentation to online verifier
 
 /// Implementation is based on the OpenID4VP – Draft 18 specification
 
-// TODO: The parameters only work with mdoc. Find out, what data is used for sd-jwt and merge them. OR: Make it an OpenID4VPMdocService
-public class OpenId4VpService: PresentationService {
+public class OpenID4VpService: PresentationService {
+    public private(set) var storage: StorageManager
+    var storageService: any WalletStorage.DataStorageService { storage.storageService }
+    public var trustedReaderCertificates: [Data]?
+    /// Method to perform mdoc authentication (MAC or signature). Defaults to device MAC
+    public var deviceAuthMethod: DeviceAuthMethod = .deviceMac
+    /// OpenID4VP verifier api URL (used for preregistered clients)
+    
 	public var status: TransferStatus = .initialized
     public var flow: FlowType
     
-    // TODO: Refactor usage of those two to work with SD-JWT
-    var state: MDocPresentationState // TODO: Find out which data we need for SD-JWT
     var mdocGeneratedNonce: String!
     var sessionTranscript: SessionTranscript!
     var eReaderPub: CoseKey? // Abstract to use any key (CoseKey or JSONWebKey)
@@ -53,13 +59,23 @@ public class OpenId4VpService: PresentationService {
 	var readerCertificateIssuer: String?
 	var readerCertificateValidationMessage: String?
     var urlSession: URLSession
+    var iaca: [SecCertificate]? // TODO: Previously passed in with MDocPresentationState
 
-    init(state: MDocPresentationState, openId4VpVerifierApiUri: String?, openId4VpVerifierLegalName: String?, urlSession: URLSession) throws {
-        self.state = state
+    init(openId4VpVerifierApiUri: String?,
+         openId4VpVerifierLegalName: String?,
+         urlSession: URLSession,
+         trustedReaderCertificates: [Data]? = nil,
+         storageType: StorageType = .keyChain,
+         serviceName: String = "eudiw",
+         accessGroup: String? = nil) throws {
         self.flow = .openID4VPOverHTTP
         self.openId4VpVerifierApiUri = openId4VpVerifierApiUri
 		self.openId4VpVerifierLegalName = openId4VpVerifierLegalName
         self.urlSession = urlSession
+        self.trustedReaderCertificates = trustedReaderCertificates
+        let keyChainObj = KeyChainStorageService(serviceName: serviceName, accessGroup: accessGroup)
+        let storageService = switch storageType { case .keyChain:keyChainObj }
+        storage = StorageManager(storageService: storageService)
     }
 	
 	public func startQrEngagement() async throws -> String? { nil }
@@ -80,10 +96,11 @@ public class OpenId4VpService: PresentationService {
                 let responseUri = if case .directPostJWT(let uri) = vp.responseMode { uri.absoluteString } else { "" }
                 mdocGeneratedNonce = Openid4VpUtils.generateMdocGeneratedNonce()
                 sessionTranscript = Openid4VpUtils.generateSessionTranscript(clientId: vp.client.id,
-                                                                             responseUri: responseUri, nonce: vp.nonce, mdocGeneratedNonce: mdocGeneratedNonce)
+                                                                             responseUri: responseUri,
+                                                                             nonce: vp.nonce,
+                                                                             mdocGeneratedNonce: mdocGeneratedNonce)
                 logger.info("Session Transcript: \(sessionTranscript.encode().toHexString()), for clientId: \(vp.client.id), responseUri: \(responseUri), nonce: \(vp.nonce), mdocGeneratedNonce: \(mdocGeneratedNonce!)")
                 self.presentationDefinition = vp.presentationDefinition
-                // TODO: parsePresentationDefinition skips document formats other than "mso_mdoc".
                 // Allow other formats to be parsed as the presentation definition is agnostic to the format
                 let items = try Openid4VpUtils.parsePresentationDefinition(vp.presentationDefinition, logger: logger)
                 guard let items else { throw PresentationSession.makeError(str: "Invalid presentation definition") }
@@ -110,7 +127,9 @@ public class OpenId4VpService: PresentationService {
         return try await receiveRequest(authorizationRequest)
 	}
     
-    private func mdocDocumentForPresentation(state: MDocPresentationState, inputDescriptor: InputDescriptor, itemsToSend: RequestItems, sessionTranscript: SessionTranscript?) throws -> DocumentForPresentation? {
+    private func mdocDocumentForPresentation(inputDescriptor: InputDescriptor, itemsToSend: RequestItems, sessionTranscript: SessionTranscript?) throws -> DocumentForPresentation? {
+        let state = try prepareMdocDataParameters()
+        iaca = state.iaca
         let docId = inputDescriptor.id
         guard let devicePrivateKey = state.devicePrivateKeys[docId] else {
             // TODO: Throw
@@ -135,18 +154,57 @@ public class OpenId4VpService: PresentationService {
         return documentToPresent
     }
     
+    public func prepareMdocDataParameters(docType: String? = nil) throws -> MDocPresentationState {
+        guard var docs = try storageService.loadDocuments(status: .issued), docs.count > 0 else { throw WalletError(description: "No documents found") }
+        if let docType { docs = docs.filter { $0.docType == docType} }
+        if let docType { guard docs.count > 0 else { throw WalletError(description: "No documents of type \(docType) found") } }
+        let cborsWithKeys = docs.compactMap { try? $0.getCborData() }
+        guard cborsWithKeys.count > 0 else { throw WalletError(description: "Documents decode error") }
+        
+        let signedObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map { ($0.id, $0.iss) })
+        let privateKeyObj = Dictionary(uniqueKeysWithValues: cborsWithKeys.map { ($0.id, $0.dpk) })
+        
+        return MDocPresentationState(input: .documentSignupIssuerSignedObj(parameters: signedObj, devicePrivateKeyObj: privateKeyObj),
+                                     trustedCertificates: trustedReaderCertificates ?? [],
+                                     deviceAuthMethod: deviceAuthMethod)
+    }
+    
+    public func prepareSdjwtDataParameters(docType: String? = nil) throws -> SdjwtPresentationState {
+        guard var docs = try storageService.loadDocuments(status: .issued), docs.count > 0 else { throw WalletError(description: "No documents found") }
+        if let docType { docs = docs.filter { $0.docType == docType} }
+        if let docType { guard docs.count > 0 else { throw WalletError(description: "No documents of type \(docType) found") } }
+        let sdjwts = docs.compactMap { try? $0.getSdjwtData() }
+        guard sdjwts.count > 0 else { throw WalletError(description: "Documents decode error") }
+        
+        return SdjwtPresentationState(sdjwtDocuments: sdjwts)
+    }
+    
+    private func sdjwtDocumentForPresentation(itemsToSend: RequestItems, inputDescriptor: InputDescriptor) throws -> DocumentForPresentation? {
+        let state = try prepareSdjwtDataParameters()
+        guard let documentToPresent = state.sdjwtDocuments.first else {
+            throw WalletError(description: "Documents decode error")
+        }
+        return DocumentForPresentation
+            .sd_jwt(SDJWTDocumentForPresentation(itemsToSend: itemsToSend,
+                                                 signedSdjwt: documentToPresent.sdjwt,
+                                                 privateKey: documentToPresent.documentPrivateKey,
+                                                 inputDescriptor: inputDescriptor))
+    }
+    
     private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration) throws -> ClientConsent {
         switch response {
         case .accepted(let itemsToSend):
-            let walletSupportedDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp)]) // TODO: Add support for sd-jwt
-            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp)])
+            let walletSupportedDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)]) // TODO: Add support for sd-jwt
+            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)])
             let presentedDocuments: [DocumentForPresentation] = try pd.inputDescriptors.compactMap { inputDescriptor in
                 let dataFormat = try Openid4VpUtils.determineVerfiablePresentationFormat(availableDocumentFormats: walletAvailableDataFormats, supportedDataFormatsByVerifier: Set(walletConfiguration.vpFormatsSupported), walletSupportedDataFormats: walletSupportedDataFormats, presentationDefinition: pd, inputDescriptor: inputDescriptor)
                 switch dataFormat {
                 case .msoMdoc:
-                    return try mdocDocumentForPresentation(state: state, inputDescriptor: inputDescriptor, itemsToSend: itemsToSend, sessionTranscript: sessionTranscript)
-//                case .jwtType(.sd_jwt):
-//                    throw PresentationSession.makeError(str: "SD-JWT not yet implemented")
+                    return try mdocDocumentForPresentation(inputDescriptor: inputDescriptor,
+                                                                  itemsToSend: itemsToSend,
+                                                                  sessionTranscript: sessionTranscript)
+                case .sdJWT(.vc):
+                    return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend, inputDescriptor: inputDescriptor)
                 default:
                     throw PresentationSession.makeError(str: "No format indication found")
                 }
@@ -212,7 +270,7 @@ public class OpenId4VpService: PresentationService {
 		var result = chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
 		guard let self, let b64cert = certificates.first, let data = Data(base64Encoded: b64cert), let cert = SecCertificateCreateWithData(nil, data as CFData), let x509 = try? X509.Certificate(derEncoded: [UInt8](data)) else { return result }
 		self.readerCertificateIssuer = x509.subject.description
-		let (isValid, validationMessages, _) = SecurityHelpers.isMdocCertificateValid(secCert: cert, usage: .mdocReaderAuth, rootCerts: state.iaca)
+        let (isValid, validationMessages, _) = SecurityHelpers.isMdocCertificateValid(secCert: cert, usage: .mdocReaderAuth, rootCerts: iaca!)
 		self.readerAuthValidated = isValid
 		self.readerCertificateValidationMessage = validationMessages.joined(separator: "\n")
 		return result
@@ -233,5 +291,9 @@ public class OpenId4VpService: PresentationService {
         return res
 	}
 	
+}
+
+public struct SdjwtPresentationState {
+    public var sdjwtDocuments: [SdjwtData]
 }
 

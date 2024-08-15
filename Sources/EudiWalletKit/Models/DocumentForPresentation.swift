@@ -4,6 +4,8 @@ import MdocSecurity18013
 //import PresentationExchange
 import SwiftCBOR
 import SiopOpenID4VP
+import eudi_lib_sdjwt_swift
+import WalletStorage
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
 struct MDocDocumentForPresentation {
@@ -56,8 +58,25 @@ struct MDocDocumentForPresentation {
 }
 
 struct SDJWTDocumentForPresentation {
+    let itemsToSend: RequestItems
+    let signedSdjwt: SignedSDJWT
+    let privateKey: Data
+    let inputDescriptor: InputDescriptor
+    
     func encode() throws -> EncodedDocumentWithDescriptorMap {
-        throw PresentationSession.makeError(str: "NOT_IMPLEMENTED")
+        let nameSpaceToItems = itemsToSend.first?.value
+        let paths: [String] = nameSpaceToItems!.values.flatMap { $0 }
+        let disclosureSelector = DisclosureSelector(signedSDJWT: signedSdjwt)
+        let disclosures = try disclosureSelector.selectDisclosures(paths: paths)
+        let holderSDJWTRepresentation = try SDJWTIssuer
+            .presentation(holdersPrivateKey: privateKey,
+                        signedSDJWT: signedSdjwt,
+                          disclosuresToPresent: disclosures,
+                          keyBindingJWT: nil) //TODO: Add keybinding
+        
+        let serialisedSdjwt = CompactSerialiser(signedSDJWT: holderSDJWTRepresentation).serialised
+        let singleDescriptorMap = DescriptorMapEntry(id: inputDescriptor.id, format: "vc+sd-jwt", path: "$") // $ will be later replaced by $[index] if multiple documents are submitted
+        return EncodedDocumentWithDescriptorMap(encodedDocument: .generic(serialisedSdjwt), descriptorMapEntry: singleDescriptorMap)
     }
 }
 
@@ -75,5 +94,24 @@ enum DocumentForPresentation {
         case .mdoc(let mDocDocumentForPresentation): return try mDocDocumentForPresentation.encode()
         case .sd_jwt(let sdJWTDocumentForPresentation): return try sdJWTDocumentForPresentation.encode()
         }
+    }
+}
+
+public struct SdjwtData {
+    public let id: String
+    public let sdjwt: SignedSDJWT
+    public let documentPrivateKey: Data
+}
+
+extension WalletStorage.Document {
+    func getSdjwtData() throws -> SdjwtData {
+        let randomId = UUID().uuidString
+        let sdjwtString = data.base64EncodedString()
+        let parser = CompactParser(serialisedString: sdjwtString)
+        let sdjwt = try parser.getSignedSdJwt()
+        guard let privateKey else {
+            throw PresentationSession.makeError(str: "Failed to create mdocDocumentForPresentation")
+        }
+        return .init(id: randomId, sdjwt: sdjwt, documentPrivateKey: privateKey)
     }
 }
