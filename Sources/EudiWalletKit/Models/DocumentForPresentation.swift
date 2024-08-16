@@ -8,6 +8,7 @@ import eudi_lib_sdjwt_swift
 import WalletStorage
 import JOSESwift
 import SwiftyJSON
+import CryptoKit
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
 struct MDocDocumentForPresentation {
@@ -75,6 +76,7 @@ struct SDJWTDocumentForPresentation {
         let alg = signedSdjwt.jwt.header.algorithm ?? .ES256
         let kbJWTProperties = KBJWTProperties(alg: alg, iat: Date(), aud: audience, nonce: nonce)
         
+        let privateKey = try SecureEnclave.P256.Signing.PrivateKey.init(dataRepresentation: self.privateKey).toSecKey()
         let holderSDJWTRepresentation = try SDJWTIssuer
             .presentation(holdersPrivateKey: privateKey,
                           signedSDJWT: signedSdjwt,
