@@ -72,7 +72,7 @@ public class OpenId4VCIService: NSObject {
     ///   - docType: the docType of the document to be issued
     ///   - useSecureEnclave: use secure enclave to protect the private key
     /// - Returns: The data of the document
-    public func issueDocument(docType: String, useSecureEnclave: Bool = true) async throws -> (Data, SignedSDJWT) {
+    public func issueDocument(docType: DocumentTypeIdentifier, useSecureEnclave: Bool = true) async throws -> (Data, SignedSDJWT) {
         try initSecurityKeys(useSecureEnclave)
         let (sdjwtString, mdocString) = try await issueByDocType(docType)
         guard let mdocData = Data(base64URLEncoded: mdocString) else {
@@ -189,7 +189,7 @@ public class OpenId4VCIService: NSObject {
 		return data
 	}
     
-    func issueByDocType(_ docType: String, claimSet: ClaimSet? = nil) async throws -> (String, String) {
+    func issueByDocType(_ docType: DocumentTypeIdentifier, claimSet: ClaimSet? = nil) async throws -> (String, String) {
         let credentialIssuerIdentifier = try CredentialIssuerId(credentialIssuerURL)
         let issuerMetadata = await CredentialIssuerMetadataResolver(fetcher: Fetcher(session: urlSession)).resolve(source: .credentialIssuer(credentialIssuerIdentifier))
         switch issuerMetadata {
@@ -199,10 +199,10 @@ public class OpenId4VCIService: NSObject {
                                                                                    oauthFetcher: Fetcher(session: urlSession))
                     .resolve(url: authorizationServer)
                 let (credentialConfigurationIdentifierCbor, _) = try getCredentialIdentifier(credentialsSupported: metaData.credentialsSupported,
-                                                                                             docType: docType,
+                                                                                             docType: docType.mdocValue,
                                                                                              format: .cbor)
                 let (credentialConfigurationIdentifierSdjwt, _) = try getCredentialIdentifier(credentialsSupported: metaData.credentialsSupported,
-                                                                                             docType: docType,
+                                                                                              docType: docType.sdjwtValue,
                                                                                              format: .sdjwt)
                 
                 let offer = try CredentialOffer(credentialIssuerIdentifier: credentialIssuerIdentifier,
@@ -254,17 +254,17 @@ public class OpenId4VCIService: NSObject {
         
 	}
 	
-	func getCredentialIdentifier(credentialsSupported: [CredentialConfigurationIdentifier: CredentialSupported], docType: String, format: DataFormat) throws -> (identifier: CredentialConfigurationIdentifier, scope: String) {
+    func getCredentialIdentifier(credentialsSupported: [CredentialConfigurationIdentifier: CredentialSupported], docType: String, format: DataFormat) throws -> (identifier: CredentialConfigurationIdentifier, scope: String) {
 		switch format {
         case .cbor:
-			guard let credential = credentialsSupported.first(where: { if case .msoMdoc(let msoMdocCred) = $0.value, msoMdocCred.docType == docType { true } else { false } }), case let .msoMdoc(msoMdocConf) = credential.value, let scope = msoMdocConf.scope else {
+            guard let credential = credentialsSupported.first(where: { if case .msoMdoc(let msoMdocCred) = $0.value, msoMdocCred.docType == docType { true } else { false } }), case let .msoMdoc(msoMdocConf) = credential.value, let scope = msoMdocConf.scope else {
 				logger.error("No credential for docType \(docType). Currently supported credentials: \(credentialsSupported.values)")
 				throw WalletError(description: "Issuer does not support doc type\(docType)")
 			}
 			logger.info("Currently supported cryptographic suites: \(msoMdocConf.credentialSigningAlgValuesSupported)")
 			return (identifier: credential.key, scope: scope)
         case .sdjwt:
-            guard let credential = credentialsSupported.first(where: { if case .sdJwtVc(let sdJwtCred) = $0.value { true } else { false } }), case let .sdJwtVc(sdJwtConf) = credential.value, let scope = sdJwtConf.scope else {
+            guard let credential = credentialsSupported.first(where: { if case .sdJwtVc(let sdJwtCred) = $0.value, sdJwtCred.vct == docType { true } else { false } }), case let .sdJwtVc(sdJwtConf) = credential.value, let scope = sdJwtConf.scope else {
                 logger.error("No credential for docType \(docType). Currently supported credentials: \(credentialsSupported.values)")
                 throw WalletError(description: "Issuer does not support doc type\(docType)")
             }

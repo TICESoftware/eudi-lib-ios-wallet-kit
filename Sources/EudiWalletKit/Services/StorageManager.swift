@@ -20,6 +20,7 @@ import MdocDataModel18013
 import WalletStorage
 import Logging
 import CryptoKit
+import eudi_lib_sdjwt_swift
 
 /// Storage manager. Provides services and view models
 public class StorageManager: ObservableObject {
@@ -29,6 +30,7 @@ public class StorageManager: ObservableObject {
 	/// Array of document models loaded in the wallet
 	@Published public var mdocModels: [any MdocDecodable] = []
 	/// Array of document identifiers loaded in the wallet
+    @Published public var sdjwtModels: [SignedSDJWT] = []
 	public var documentIds: [String] { mdocModels.map(\.id) }
 	var storageService: any DataStorageService
 	/// Whether wallet currently has loaded data
@@ -54,9 +56,9 @@ public class StorageManager: ObservableObject {
 	
 	@MainActor
 	func refreshPublishedVars() {
-		hasData = mdocModels.count > 0
+        hasData = mdocModels.count > 0 || sdjwtModels.count > 0
 		hasWellKnownData = hasData && !Set(docTypes).isDisjoint(with: Self.knownDocTypes)
-		docCount = mdocModels.count
+        docCount = mdocModels.count + sdjwtModels.count
 		mdlModel = getTypedDoc()
 		pidModel = getTypedDoc()
 		otherModels = getTypedDocs()
@@ -65,6 +67,7 @@ public class StorageManager: ObservableObject {
 	@MainActor
 	fileprivate func refreshDocModels(_ docs: [WalletStorage.Document]) {
 		mdocModels = docs.compactMap(toModel(doc:))
+        sdjwtModels = docs.compactMap(toSdjwtModel(doc:))
 	}
 	
 	@MainActor
@@ -73,9 +76,27 @@ public class StorageManager: ObservableObject {
 		if let mdoc { mdocModels.append(mdoc) }
 		return mdoc
 	}
+    
+    @MainActor
+    @discardableResult func appendSdjwtModel(_ doc: WalletStorage.Document) -> SignedSDJWT? {
+        guard let sdjwt = try? toSdjwtModel(doc: doc) else { return nil }
+        sdjwtModels.append(sdjwt)
+        return sdjwt
+    }
+    
+    func toSdjwtModel(doc: WalletStorage.Document) -> SignedSDJWT? {
+        guard let sdjwtData = try? doc.getSdjwtData() else {
+            logger.warning("Tried to model to sdjwt: \(doc)")
+            return nil
+        }
+        return sdjwtData.sdjwt
+    }
 
 	func toModel(doc: WalletStorage.Document) -> (any MdocDecodable)? {
-		guard let cborData = try? doc.getCborData() else { return nil }
+        guard let cborData = try? doc.getCborData() else {
+            logger.warning("Tried to model to mdoc: \(doc)")
+            return nil
+        }
 		var retModel: (any MdocDecodable)? = switch doc.docType {
         case EuPidModel.euPidDocType: EuPidModel(id: cborData.id, createdAt: doc.createdAt, issuerSigned: cborData.iss, devicePrivateKey: cborData.dpk)
         case IsoMdlModel.isoDocType: IsoMdlModel(id: cborData.id, createdAt: doc.createdAt, issuerSigned: cborData.iss, devicePrivateKey: cborData.dpk)
