@@ -6,6 +6,8 @@ import SwiftCBOR
 import SiopOpenID4VP
 import eudi_lib_sdjwt_swift
 import WalletStorage
+import JSONWebSignature
+import SwiftyJSON
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
 struct MDocDocumentForPresentation {
@@ -62,17 +64,22 @@ struct SDJWTDocumentForPresentation {
     let signedSdjwt: SignedSDJWT
     let privateKey: Data
     let inputDescriptor: InputDescriptor
+    let audience: String
+    let nonce: String
     
     func encode() throws -> EncodedDocumentWithDescriptorMap {
         let nameSpaceToItems = itemsToSend.first?.value
         let paths: [String] = nameSpaceToItems!.values.flatMap { $0 }
         let disclosureSelector = DisclosureSelector(signedSDJWT: signedSdjwt)
         let disclosures = try disclosureSelector.selectDisclosures(paths: paths)
+        let alg = signedSdjwt.jwt.protectedHeader.algorithm ?? .ES256
+        let kbJWTProperties = KBJWTProperties(alg: alg, iat: Date(), aud: audience, nonce: nonce)
+        
         let holderSDJWTRepresentation = try SDJWTIssuer
             .presentation(holdersPrivateKey: privateKey,
-                        signedSDJWT: signedSdjwt,
+                          signedSDJWT: signedSdjwt,
                           disclosuresToPresent: disclosures,
-                          keyBindingJWT: nil) //TODO: Add keybinding
+                          keyBindingJWTProperties: kbJWTProperties)
         
         let serialisedSdjwt = CompactSerialiser(signedSDJWT: holderSDJWTRepresentation).serialised
         let singleDescriptorMap = DescriptorMapEntry(id: inputDescriptor.id, format: "vc+sd-jwt", path: "$") // $ will be later replaced by $[index] if multiple documents are submitted

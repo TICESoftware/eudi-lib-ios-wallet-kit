@@ -180,19 +180,34 @@ public class OpenID4VpService: PresentationService {
         return SdjwtPresentationState(sdjwtDocuments: sdjwts)
     }
     
-    private func sdjwtDocumentForPresentation(itemsToSend: RequestItems, inputDescriptor: InputDescriptor) throws -> DocumentForPresentation? {
+    private func sdjwtDocumentForPresentation(itemsToSend: RequestItems, inputDescriptor: InputDescriptor, resolvedRequestData: ResolvedRequestData) throws -> DocumentForPresentation? {
         let state = try prepareSdjwtDataParameters()
         guard let documentToPresent = state.sdjwtDocuments.first else {
             throw WalletError(description: "Documents decode error")
         }
+        
+        let nonce = switch resolvedRequestData {
+        case .idToken(let request): request.nonce
+        case .vpToken(let request): request.nonce
+        case .idAndVpToken(let request): throw WalletError(description: "Can not access nonce in idAndVpToken-case")
+        }
+        
+        let audience = switch resolvedRequestData {
+        case .idToken(let request): request.nonce
+        case .vpToken(let request): request.nonce
+        case .idAndVpToken(let request): throw WalletError(description: "Can not access nonce in idAndVpToken-case")
+        }
+        
         return DocumentForPresentation
             .sd_jwt(SDJWTDocumentForPresentation(itemsToSend: itemsToSend,
                                                  signedSdjwt: documentToPresent.sdjwt,
                                                  privateKey: documentToPresent.documentPrivateKey,
-                                                 inputDescriptor: inputDescriptor))
+                                                 inputDescriptor: inputDescriptor,
+                                                 audience: audience,
+                                                 nonce: nonce))
     }
     
-    private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration) throws -> ClientConsent {
+    private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) throws -> ClientConsent {
         switch response {
         case .accepted(let itemsToSend):
             let walletSupportedDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)]) // TODO: Add support for sd-jwt
@@ -205,7 +220,9 @@ public class OpenID4VpService: PresentationService {
                                                                   itemsToSend: itemsToSend,
                                                                   sessionTranscript: sessionTranscript)
                 case .sdJWT(.vc):
-                    return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend, inputDescriptor: inputDescriptor)
+                    return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend,
+                                                            inputDescriptor: inputDescriptor,
+                                                            resolvedRequestData: resolvedRequestData)
                 default:
                     throw PresentationSession.makeError(str: "No format indication found")
                 }
@@ -245,7 +262,7 @@ public class OpenID4VpService: PresentationService {
             throw PresentationSession.makeError(str: "Unexpected error")
         }
         
-        let consent = try consentForResponse(response, presentationDefinition: pd, walletConfiguration: walletConfiguration)
+        let consent = try consentForResponse(response, presentationDefinition: pd, walletConfiguration: walletConfiguration, resolvedRequestData: resolved)
         
         let response = try AuthorizationResponse(
             resolvedRequest: resolved,
