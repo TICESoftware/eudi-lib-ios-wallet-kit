@@ -30,7 +30,7 @@ public class StorageManager: ObservableObject {
 	/// Array of document models loaded in the wallet
 	@Published public var mdocModels: [any MdocDecodable] = []
 	/// Array of document identifiers loaded in the wallet
-    @Published public var sdjwtModels: [SignedSDJWT] = []
+    @Published public var sdjwtModels: [SdjwtModel] = []
 	public var documentIds: [String] { mdocModels.map(\.id) }
 	var storageService: any DataStorageService
 	/// Whether wallet currently has loaded data
@@ -78,18 +78,18 @@ public class StorageManager: ObservableObject {
 	}
     
     @MainActor
-    @discardableResult func appendSdjwtModel(_ doc: WalletStorage.Document) -> SignedSDJWT? {
-        guard let sdjwt = try? toSdjwtModel(doc: doc) else { return nil }
-        sdjwtModels.append(sdjwt)
-        return sdjwt
+    @discardableResult func appendSdjwtModel(_ doc: WalletStorage.Document) -> SdjwtModel? {
+        guard let sdjwtModel = try? toSdjwtModel(doc: doc) else { return nil }
+        sdjwtModels.append(sdjwtModel)
+        return sdjwtModel
     }
     
-    func toSdjwtModel(doc: WalletStorage.Document) -> SignedSDJWT? {
+    func toSdjwtModel(doc: WalletStorage.Document) -> SdjwtModel? {
         guard let sdjwtData = try? doc.getSdjwtData() else {
             logger.warning("Tried to model to sdjwt: \(doc)")
             return nil
         }
-        return sdjwtData.sdjwt
+        return .init(id: doc.id, docType: doc.docType, sdjwt: sdjwtData.sdjwt, documentPrivateKey: doc.privateKey)
     }
 
 	func toModel(doc: WalletStorage.Document) -> (any MdocDecodable)? {
@@ -112,7 +112,10 @@ public class StorageManager: ObservableObject {
 	}
 	
 	public func getDocIdsToTypes() -> [String: String] {
-		Dictionary(uniqueKeysWithValues: mdocModels.map { m in (m.id, m.docType) })
+        var dict = Dictionary(uniqueKeysWithValues: mdocModels.map { m in (m.id, m.docType) })
+        var sdjwts = Dictionary(uniqueKeysWithValues: sdjwtModels.map { m in (m.id, m.docType) })
+        dict.merge(sdjwts, uniquingKeysWith: { current, _ in current })
+        return dict
 	}
 	
 	/// Load documents from storage
@@ -196,9 +199,10 @@ public class StorageManager: ObservableObject {
 	}
 	
 	/// Delete documenmts
-	public func deleteDocuments() async throws {
+    public func deleteDocuments() async throws {
 		do {
             try storageService.deleteDocuments(status: .issued)
+            try storageService.deleteDocuments(status: .deferred)
 			await MainActor.run { mdocModels = []; mdlModel = nil; pidModel = nil }
 			await refreshPublishedVars()
 		} catch {

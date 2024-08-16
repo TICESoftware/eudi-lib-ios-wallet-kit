@@ -103,6 +103,13 @@ public struct SdjwtData {
     public let documentPrivateKey: Data
 }
 
+public struct SdjwtModel {
+    public let id: String
+    public let docType: String
+    public let sdjwt: SignedSDJWT
+    public let documentPrivateKey: Data?
+}
+
 extension WalletStorage.Document {
     func getSdjwtData() throws -> SdjwtData {
         let randomId = UUID().uuidString

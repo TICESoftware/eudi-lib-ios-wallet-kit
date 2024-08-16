@@ -101,6 +101,7 @@ public class OpenID4VpService: PresentationService {
                                                                              mdocGeneratedNonce: mdocGeneratedNonce)
                 logger.info("Session Transcript: \(sessionTranscript.encode().toHexString()), for clientId: \(vp.client.id), responseUri: \(responseUri), nonce: \(vp.nonce), mdocGeneratedNonce: \(mdocGeneratedNonce!)")
                 self.presentationDefinition = vp.presentationDefinition
+                
                 // Allow other formats to be parsed as the presentation definition is agnostic to the format
                 let items = try Openid4VpUtils.parsePresentationDefinition(vp.presentationDefinition, logger: logger)
                 guard let items else { throw PresentationSession.makeError(str: "Invalid presentation definition") }
@@ -284,7 +285,7 @@ public class OpenID4VpService: PresentationService {
 		guard let keySet = try? WebKeySet(jwk: rsaJWK) else { return nil }
 		var supportedClientIdSchemes: [SupportedClientIdScheme] = [.x509SanUri(trust: chainVerifier), .x509SanDns(trust: chainVerifier)]
 		if let verifierApiUrl, let verifierLegalName {
-			let verifierMetaData = PreregisteredClient(clientId: "Verifier", legalName: verifierLegalName, jarSigningAlg: JWSAlgorithm(.RS256), jwkSetSource: WebKeySource.fetchByReference(url: URL(string: "\(verifierApiUrl)/wallet/public-keys.json")!))
+			let verifierMetaData = PreregisteredClient(clientId: "staging.verifier.wallet.tice.software", legalName: verifierLegalName, jarSigningAlg: JWSAlgorithm(.RS256), jwkSetSource: WebKeySource.fetchByReference(url: URL(string: "\(verifierApiUrl)/wallet/public-keys.json")!))
 			supportedClientIdSchemes += [.preregistered(clients: [verifierMetaData.clientId: verifierMetaData])]
         }
         let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [], session: urlSession) // TODO: Fill vpFormatsSupported

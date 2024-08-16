@@ -271,7 +271,7 @@ public final class EudiWallet: ObservableObject {
                 let docIdAndTypes = storage.getDocIdsToTypes()
                 let openIdSvc = try OpenID4VpService(openId4VpVerifierApiUri: self.verifierApiUri,
                                                      openId4VpVerifierLegalName: self.verifierLegalName,
-                                                     urlSession: urlSession)
+                                                     urlSession: urlSession, trustedReaderCertificates: trustedReaderCertificates)
                 return PresentationSession(presentationService: openIdSvc, docIdAndTypes: docIdAndTypes, userAuthenticationRequired: userAuthenticationRequired)
 			default:
                 let docIdAndTypes = storage.getDocIdsToTypes()

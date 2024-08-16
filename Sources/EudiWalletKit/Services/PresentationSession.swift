@@ -65,14 +65,30 @@ public class PresentationSession: ObservableObject {
 		guard docIdAndTypes.count > 0 else { throw Self.makeError(str: "No documents added to session ")}
 		// show the items as checkboxes
 		guard let validRequestItems = request[UserRequestKeys.valid_items_requested.rawValue] as? RequestItems else { return }
+        guard let requestedDocType: String = validRequestItems.keys.first else {
+            return
+            //TODO: Doing this we dont support claims from multiple different doctypes?
+        }
 		disclosedDocuments = [DocElementsViewModel]()
-		for (docId, docType) in docIdAndTypes {
-			var tmp = validRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: true)
-			if let errorRequestItems = request[UserRequestKeys.error_items_requested.rawValue] as? RequestItems, errorRequestItems.count > 0 {
-				tmp = tmp.merging(with: errorRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: false))
-			}
-			disclosedDocuments.append(contentsOf: tmp)
-		}
+        let firstMatchingDocument = docIdAndTypes.first { (_, docType) in
+            docType == requestedDocType
+        }
+        guard let firstMatchingDocument else {
+            print("Error DecodeRequest: No matching document found for document type : \(requestedDocType)")
+            return
+        }
+        var tmp = validRequestItems.toDocElementViewModels(docId: firstMatchingDocument.key,
+                                                           docType: firstMatchingDocument.value,
+                                                           valid: true)
+        disclosedDocuments.append(contentsOf: tmp)
+        
+//        for (docId, docType) in docIdAndTypes where docType == requestedDocType  {
+//			var tmp = validRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: true)
+//			if let errorRequestItems = request[UserRequestKeys.error_items_requested.rawValue] as? RequestItems, errorRequestItems.count > 0 {
+//				tmp = tmp.merging(with: errorRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: false))
+//			}
+//			disclosedDocuments.append(contentsOf: tmp)
+//		}
 		if let readerAuthority = request[UserRequestKeys.reader_certificate_issuer.rawValue] as? String {
 			readerCertIssuer = readerAuthority
 			readerCertIssuerValid = request[UserRequestKeys.reader_auth_validated.rawValue] as? Bool

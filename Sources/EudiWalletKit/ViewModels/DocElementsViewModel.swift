@@ -48,7 +48,7 @@ extension DocElementsViewModel {
 
 extension RequestItems {
 	func toDocElementViewModels(docId: String, docType: String, valid: Bool) -> [DocElementsViewModel] {
-		compactMap { dType,nsItems in
+		compactMap { dType, nsItems in
 			if dType != docType { nil }
 			else { DocElementsViewModel(docId: docId, docType: docType, isEnabled: valid, elements: DocElementsViewModel.fluttenItemViewModels(nsItems, valid: valid, mandatoryElementKeys: DocElementsViewModel.getMandatoryElementKeys(docType: docType))) }
 		}
