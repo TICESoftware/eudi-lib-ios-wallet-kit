@@ -19,15 +19,6 @@
       }
     },
     {
-      "identity" : "cryptoswift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/krzyzanowskim/CryptoSwift.git",
-      "state" : {
-        "revision" : "c9c3df6ab812de32bae61fc0cd1bf6d45170ebf0",
-        "version" : "1.8.2"
-      }
-    },
-    {
       "identity" : "eudi-lib-ios-iso18013-data-model",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-iso18013-data-model.git",
@@ -95,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "d691a21433079e472866311394d750ad2b8f3745"
+        "branch" : "replace-lib",
+        "revision" : "34c098f827e3f63ea29610572f09e3877c6beb02"
       }
     },
     {
@@ -106,15 +97,6 @@
       "state" : {
         "revision" : "328211598c24f356fccbcb5451cc48e21071a963",
         "version" : "0.4.139"
-      }
-    },
-    {
-      "identity" : "jose-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/TICESoftware/jose-swift",
-      "state" : {
-        "branch" : "certificate_chain",
-        "revision" : "1fa5cf32e0956b2173c3108d0ac898cfa4a891fb"
       }
     },
     {
@@ -142,15 +124,6 @@
       "state" : {
         "revision" : "3bfd2737b700b9a36565a8c94f4ad2b050a5e574",
         "version" : "1.0.1"
-      }
-    },
-    {
-      "identity" : "secp256k1.swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/GigaBitcoin/secp256k1.swift.git",
-      "state" : {
-        "revision" : "4c77c7384768acf1093d66ccaacf298d322b10b7",
-        "version" : "0.15.0"
       }
     },
     {

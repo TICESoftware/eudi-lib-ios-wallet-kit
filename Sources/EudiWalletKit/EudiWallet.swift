@@ -315,24 +315,30 @@ public final class EudiWallet: ObservableObject {
 		let context = LAContext()
 		var error: NSError?
 		let policy: LAPolicy = .deviceOwnerAuthentication
-		if context.canEvaluatePolicy(policy, error: &error) {
-			do {
-				let success = try await context.evaluatePolicy(policy, localizedReason: localizedReason)
-				if success {
-					return try await action()
-				}
-				else { dismiss()}
-			} catch let laError as LAError {
-				if !isFallBack, laError.code == .userFallback {
-					return try await authorizedAction(isFallBack: true, action: action, disabled: disabled, dismiss: dismiss, localizedReason: localizedReason)
-				} else {
-					dismiss()
-					return nil
-				}
-			}
-		} else if let error {
-			throw WalletError(description: error.localizedDescription, code: error.code)
-		}
-		return nil
+        guard context.canEvaluatePolicy(policy, error: &error) else {
+            throw WalletError(description: "Can not evaluate policy: \(error)")
+        }
+        
+        if let error {
+            throw WalletError(description: error.localizedDescription, code: error.code)
+        }
+        
+        do {
+            let success = try await context.evaluatePolicy(policy, localizedReason: localizedReason)
+            if success {
+                return try await action()
+            }
+            else {
+                dismiss()
+                return nil
+            }
+        } catch let laError as LAError {
+            if !isFallBack, laError.code == .userFallback {
+                return try await authorizedAction(isFallBack: true, action: action, disabled: disabled, dismiss: dismiss, localizedReason: localizedReason)
+            } else {
+                dismiss()
+                return nil
+            }
+        }
 	}
 }

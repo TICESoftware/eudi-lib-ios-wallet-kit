@@ -6,7 +6,7 @@ import SwiftCBOR
 import SiopOpenID4VP
 import eudi_lib_sdjwt_swift
 import WalletStorage
-import JSONWebSignature
+import JOSESwift
 import SwiftyJSON
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
@@ -72,7 +72,7 @@ struct SDJWTDocumentForPresentation {
         let paths: [String] = nameSpaceToItems!.values.flatMap { $0 }
         let disclosureSelector = DisclosureSelector(signedSDJWT: signedSdjwt)
         let disclosures = try disclosureSelector.selectDisclosures(paths: paths)
-        let alg = signedSdjwt.jwt.protectedHeader.algorithm ?? .ES256
+        let alg = signedSdjwt.jwt.header.algorithm ?? .ES256
         let kbJWTProperties = KBJWTProperties(alg: alg, iat: Date(), aud: audience, nonce: nonce)
         
         let holderSDJWTRepresentation = try SDJWTIssuer
@@ -120,7 +120,7 @@ public struct SdjwtModel {
 extension WalletStorage.Document {
     func getSdjwtData() throws -> SdjwtData {
         let randomId = UUID().uuidString
-        let sdjwtString = data.base64EncodedString()
+        let sdjwtString = String(decoding: data, as: UTF8.self)
         let parser = CompactParser(serialisedString: sdjwtString)
         let sdjwt = try parser.getSignedSdJwt()
         guard let privateKey else {

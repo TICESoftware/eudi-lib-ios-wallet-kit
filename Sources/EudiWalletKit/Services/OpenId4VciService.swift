@@ -56,10 +56,10 @@ public class OpenId4VCIService: NSObject {
 	fileprivate func initSecurityKeys(_ useSecureEnclave: Bool) throws {
 		usedSecureEnclave = useSecureEnclave && SecureEnclave.isAvailable
 		if !usedSecureEnclave {
-			let key = try P256.KeyAgreement.PrivateKey(x963Representation: issueReq.keyData)
+            let key = try P256.Signing.PrivateKey(x963Representation: issueReq.keyData)
 			privateKey = try key.toSecKey()
 		} else {
-			let seKey = try SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: issueReq.keyData)
+            let seKey = try SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: issueReq.keyData)
 			privateKey = try seKey.toSecKey()
 		}
 		publicKey = try KeyController.generateECDHPublicKey(from: privateKey)
@@ -84,7 +84,7 @@ public class OpenId4VCIService: NSObject {
         let verifier = try SDJWTVerifier(parser: parser)
         
         let result = try verifier.verifyIssuance { jws in
-            let caCert = jws.protectedHeader.x509CertificateChain?.first
+            let caCert = jws.header.x5c?.first
             let secKey = try createSecKeyFromCertificate(caCert!)
             return try SignatureVerifier(signedJWT: jws, publicKey: secKey)
         }
@@ -430,7 +430,7 @@ public class OpenId4VCIService: NSObject {
 	}
 }
 
-extension SecureEnclave.P256.KeyAgreement.PrivateKey {
+extension SecureEnclave.P256.Signing.PrivateKey {
 	
     
 	func toSecKey() throws -> SecKey {
@@ -445,7 +445,7 @@ extension SecureEnclave.P256.KeyAgreement.PrivateKey {
 	}
 }
 
-extension P256.KeyAgreement.PrivateKey {
+extension P256.Signing.PrivateKey {
 	func toSecKey() throws -> SecKey {
 		var error: Unmanaged<CFError>?
 		guard let privateKey = SecKeyCreateWithData(x963Representation as NSData, [kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyClass: kSecAttrKeyClassPrivate] as NSDictionary, &error) else {

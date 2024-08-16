@@ -152,17 +152,20 @@ public class PresentationSession: ObservableObject {
 	///   - userAccepted: Whether user confirmed to send the response
 	///   - itemsToSend: Data to send organized into a hierarcy of doc.types and namespaces
 	///   - onCancel: Action to perform if the user cancels the biometric authentication
-	public func sendResponse(userAccepted: Bool, itemsToSend: RequestItems, onCancel: (() -> Void)? = nil, onSuccess: ((URL?) -> Void)? = nil) async {
+    public func sendResponse(userAccepted: Bool, itemsToSend: RequestItems, onCancel: (() -> Void), onSuccess: ((URL?) -> Void), onError: (Error) -> Void) async {
 		do {
 			await MainActor.run {status = .userSelected }
             let response = userAccepted ? PresentationResponse.accepted(itemsToSend: itemsToSend) : .denied
             let action = { [ weak self] in
                 let url = try await self?.presentationService.sendResponse(response)
-                onSuccess?(url)
+                onSuccess(url)
             }
-			try await EudiWallet.authorizedAction(action: action, disabled: !userAuthenticationRequired, dismiss: { onCancel?() }, localizedReason: NSLocalizedString("authenticate_to_share_data", comment: "") )
+			try await EudiWallet.authorizedAction(action: action, disabled: !userAuthenticationRequired, dismiss: { onCancel() }, localizedReason: NSLocalizedString("authenticate_to_share_data", comment: "") )
 			await MainActor.run { status = .responseSent }
-		} catch { await setError(error) }
+        } catch {
+            await setError(error)
+            onError(error)
+        }
 	}
 	
 	

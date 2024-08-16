@@ -170,11 +170,11 @@ public class OpenID4VpService: PresentationService {
                                      deviceAuthMethod: deviceAuthMethod)
     }
     
-    public func prepareSdjwtDataParameters(docType: String? = nil) throws -> SdjwtPresentationState {
+    public func prepareSdjwtDataParameters(docType: String? = nil) throws -> SdjwtPresentationState { // TODO: docType must not be nil
         guard var docs = try storageService.loadDocuments(status: .issued), docs.count > 0 else { throw WalletError(description: "No documents found") }
         if let docType { docs = docs.filter { $0.docType == docType} }
         if let docType { guard docs.count > 0 else { throw WalletError(description: "No documents of type \(docType) found") } }
-        let sdjwts = docs.compactMap { try? $0.getSdjwtData() }
+        let sdjwts = docs.compactMap { try? $0.getSdjwtData() } // Only decode the docs that should work
         guard sdjwts.count > 0 else { throw WalletError(description: "Documents decode error") }
         
         return SdjwtPresentationState(sdjwtDocuments: sdjwts)
@@ -193,8 +193,8 @@ public class OpenID4VpService: PresentationService {
         }
         
         let audience = switch resolvedRequestData {
-        case .idToken(let request): request.nonce
-        case .vpToken(let request): request.nonce
+        case .idToken(let request): request.client.id
+        case .vpToken(let request): request.client.id
         case .idAndVpToken(let request): throw WalletError(description: "Can not access nonce in idAndVpToken-case")
         }
         
@@ -210,8 +210,8 @@ public class OpenID4VpService: PresentationService {
     private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) throws -> ClientConsent {
         switch response {
         case .accepted(let itemsToSend):
-            let walletSupportedDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)]) // TODO: Add support for sd-jwt
-            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)])
+            let walletSupportedDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)])
+            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)]) // TODO: Check our items to send, which documents we really have
             let presentedDocuments: [DocumentForPresentation] = try pd.inputDescriptors.compactMap { inputDescriptor in
                 let dataFormat = try Openid4VpUtils.determineVerfiablePresentationFormat(availableDocumentFormats: walletAvailableDataFormats, supportedDataFormatsByVerifier: Set(walletConfiguration.vpFormatsSupported), walletSupportedDataFormats: walletSupportedDataFormats, presentationDefinition: pd, inputDescriptor: inputDescriptor)
                 switch dataFormat {
@@ -236,7 +236,7 @@ public class OpenID4VpService: PresentationService {
                 let presentationSubmission = PresentationSubmission(id: UUID().uuidString,
                                                                     definitionID: pd.id,
                                                                     descriptorMap: [document.descriptorMapEntry])
-                return .vpToken(vpToken: encodedDocuments[0].encodedDocument,
+                return .vpToken(vpToken: document.encodedDocument,
                                 presentationSubmission: presentationSubmission)
             default:
                 let descriptorMap = encodedDocuments.map(\.descriptorMapEntry)
@@ -305,7 +305,10 @@ public class OpenID4VpService: PresentationService {
 			let verifierMetaData = PreregisteredClient(clientId: "staging.verifier.wallet.tice.software", legalName: verifierLegalName, jarSigningAlg: JWSAlgorithm(.RS256), jwkSetSource: WebKeySource.fetchByReference(url: URL(string: "\(verifierApiUrl)/wallet/public-keys.json")!))
 			supportedClientIdSchemes += [.preregistered(clients: [verifierMetaData.clientId: verifierMetaData])]
         }
-        let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [], session: urlSession) // TODO: Fill vpFormatsSupported
+        let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [
+            PresentationExchange.ClaimFormat.msoMdoc,
+            PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc)
+        ], session: urlSession) // TODO: Fill vpFormatsSupported
         return res
 	}
 	

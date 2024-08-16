@@ -136,7 +136,7 @@ class Openid4VpUtils {
     static func determineVerfiablePresentationFormat(availableDocumentFormats: Set<ClaimFormat>, supportedDataFormatsByVerifier: Set<ClaimFormat>, walletSupportedDataFormats: Set<ClaimFormat>, presentationDefinition: PresentationDefinition, inputDescriptor: InputDescriptor) throws -> ClaimFormat {
         
         let usableDataFormats = supportedDataFormatsByVerifier.intersection(walletSupportedDataFormats)
-        guard !usableDataFormats.isEmpty else { throw PresentationSession.makeError(str: "No common data formats") }
+        guard !usableDataFormats.isEmpty else { throw PresentationSession.makeError(str: "No common data formats: \(supportedDataFormatsByVerifier)\nvs.\n\(walletSupportedDataFormats)") }
         
         let requestedFormats: Set<ClaimFormat>
         if let inputDescriptorFormat = inputDescriptor.formatContainer {
