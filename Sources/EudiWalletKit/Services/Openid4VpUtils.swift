@@ -90,7 +90,17 @@ class Openid4VpUtils {
         
         var res = RequestItems()
         for inputDescriptor in presentationDefinition.inputDescriptors {
-            guard let fc = inputDescriptor.formatContainer else { logger?.warning("Input descriptor with id \(inputDescriptor.id) is invalid "); continue }
+            let fc: FormatContainer
+            if let formatContainer = inputDescriptor.formatContainer {
+                fc = formatContainer
+            } else if let formatContainer = presentationDefinition.formatContainer {
+                fc = formatContainer
+            } else {
+                logger?.warning("Input descriptor with id \(inputDescriptor.id) is invalid. Falling back to vc+sd-jwt.");
+                fc = FormatContainer(formats: [
+                    ["designation": "vc+sd-jwt"]
+                ])
+            }
             // TODO: Support vc+sd-jwt here. Or actually, allow all formats here.
             let format = fc.formats.first?["designation"].string?.lowercased()
             switch format {

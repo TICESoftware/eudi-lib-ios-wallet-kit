@@ -131,8 +131,8 @@ public class OpenID4VpService: PresentationService {
     private func mdocDocumentForPresentation(inputDescriptor: InputDescriptor, itemsToSend: RequestItems, sessionTranscript: SessionTranscript?) throws -> DocumentForPresentation? {
         let state = try prepareMdocDataParameters()
         iaca = state.iaca
-        let docId = inputDescriptor.id
-        guard let devicePrivateKey = state.devicePrivateKeys[docId] else {
+        guard let docId = itemsToSend.keys.first,
+              let devicePrivateKey = state.devicePrivateKeys[docId] else {
             // TODO: Throw
             return nil
         }
@@ -210,7 +210,7 @@ public class OpenID4VpService: PresentationService {
     private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) throws -> ClientConsent {
         switch response {
         case .accepted(let itemsToSend):
-            let walletSupportedDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)])
+            let walletSupportedDataFormats = Set(walletConfiguration.vpFormatsSupported)
             let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)]) // TODO: Check our items to send, which documents we really have
             let presentedDocuments: [DocumentForPresentation] = try pd.inputDescriptors.compactMap { inputDescriptor in
                 let dataFormat = try Openid4VpUtils.determineVerfiablePresentationFormat(availableDocumentFormats: walletAvailableDataFormats, supportedDataFormatsByVerifier: Set(walletConfiguration.vpFormatsSupported), walletSupportedDataFormats: walletSupportedDataFormats, presentationDefinition: pd, inputDescriptor: inputDescriptor)
@@ -244,7 +244,8 @@ public class OpenID4VpService: PresentationService {
                 let presentationSubmission = PresentationSubmission(id: UUID().uuidString,
                                                                     definitionID: pd.id,
                                                                     descriptorMap: descriptorMap)
-                return .vpToken(vpToken: .generic("[\(encodedDocuments.map(\.encodedDocument))]"),
+                let allDocuments = encodedDocuments.map(\.encodedDocument).map(\.value).joined(separator: ",\n")
+                return .vpToken(vpToken: .generic("[\(allDocuments)]"),
                                 presentationSubmission: presentationSubmission)
             }
         case .denied:
@@ -288,7 +289,8 @@ public class OpenID4VpService: PresentationService {
 		var result = chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
 		guard let self, let b64cert = certificates.first, let data = Data(base64Encoded: b64cert), let cert = SecCertificateCreateWithData(nil, data as CFData), let x509 = try? X509.Certificate(derEncoded: [UInt8](data)) else { return result }
 		self.readerCertificateIssuer = x509.subject.description
-        let (isValid, validationMessages, _) = SecurityHelpers.isMdocCertificateValid(secCert: cert, usage: .mdocReaderAuth, rootCerts: iaca!)
+    // TODO: iaca is nil with schnapsladen
+        let (isValid, validationMessages, _) = SecurityHelpers.isMdocCertificateValid(secCert: cert, usage: .mdocReaderAuth, rootCerts: iaca ?? [])
 		self.readerAuthValidated = isValid
 		self.readerCertificateValidationMessage = validationMessages.joined(separator: "\n")
 		return result
@@ -300,11 +302,20 @@ public class OpenID4VpService: PresentationService {
 					let rsaPublicKey = try? KeyController.generateRSAPublicKey(from: rsaPrivateKey) else { return nil }
 		guard let rsaJWK = try? RSAPublicKey(publicKey: rsaPublicKey, additionalParameters: ["use": "sig", "kid": UUID().uuidString, "alg": "RS256"]) else { return nil }
 		guard let keySet = try? WebKeySet(jwk: rsaJWK) else { return nil }
-		var supportedClientIdSchemes: [SupportedClientIdScheme] = [.x509SanUri(trust: chainVerifier), .x509SanDns(trust: chainVerifier)]
-		if let verifierApiUrl, let verifierLegalName {
-			let verifierMetaData = PreregisteredClient(clientId: "staging.verifier.wallet.tice.software", legalName: verifierLegalName, jarSigningAlg: JWSAlgorithm(.RS256), jwkSetSource: WebKeySource.fetchByReference(url: URL(string: "\(verifierApiUrl)/wallet/public-keys.json")!))
-			supportedClientIdSchemes += [.preregistered(clients: [verifierMetaData.clientId: verifierMetaData])]
-        }
+    
+    // TODO: Remove trueVerifier and use chainVerifier again, as this defeats all certificate checking.
+    lazy var trueVerifier: CertificateTrust = { [weak self] certificates in
+      return true
+    }
+    
+		var supportedClientIdSchemes: [SupportedClientIdScheme] = [
+      .x509SanUri(trust: trueVerifier),
+      .x509SanDns(trust: trueVerifier),
+    ]
+//		if let verifierApiUrl, let verifierLegalName {
+//			let verifierMetaData = PreregisteredClient(clientId: "staging.verifier.wallet.tice.software", legalName: verifierLegalName, jarSigningAlg: JWSAlgorithm(.RS256), jwkSetSource: WebKeySource.fetchByReference(url: URL(string: "\(verifierApiUrl)/wallet/public-keys.json")!))
+//			supportedClientIdSchemes += [.preregistered(clients: [verifierMetaData.clientId: verifierMetaData])]
+//        }
         let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [
             PresentationExchange.ClaimFormat.msoMdoc,
             PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc)

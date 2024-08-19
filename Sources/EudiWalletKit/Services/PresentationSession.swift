@@ -61,42 +61,45 @@ public class PresentationSession: ObservableObject {
 	///
 	/// The ``disclosedDocuments`` property will be set. Additionally ``readerCertIssuer`` and ``readerCertValidationMessage`` may be set
 	/// - Parameter request: Keys are defined in the ``UserRequestKeys``
-	func decodeRequest(_ request: [String: Any]) throws {
-		guard docIdAndTypes.count > 0 else { throw Self.makeError(str: "No documents added to session ")}
-		// show the items as checkboxes
-		guard let validRequestItems = request[UserRequestKeys.valid_items_requested.rawValue] as? RequestItems else { return }
-        guard let requestedDocType: String = validRequestItems.keys.first else {
+    func decodeRequest(_ request: [String: Any]) throws {
+        guard docIdAndTypes.count > 0 else { throw Self.makeError(str: "No documents added to session ")}
+        // show the items as checkboxes
+        guard let validRequestItems = request[UserRequestKeys.valid_items_requested.rawValue] as? RequestItems else { return }
+        guard let requestedDocId: String = validRequestItems.keys.first,
+              let requestedDocType = validRequestItems[requestedDocId]?.keys.first else {
             return
             //TODO: Doing this we dont support claims from multiple different doctypes?
         }
-		disclosedDocuments = [DocElementsViewModel]()
-        let firstMatchingDocument = docIdAndTypes.first { (_, docType) in
-            docType == requestedDocType
+        let requestedDocTypes: [String] = validRequestItems.flatMap { key, item in
+            return item.keys
         }
-        guard let firstMatchingDocument else {
-            print("Error DecodeRequest: No matching document found for document type : \(requestedDocType)")
-            return
-        }
-        var tmp = validRequestItems.toDocElementViewModels(docId: firstMatchingDocument.key,
-                                                           docType: firstMatchingDocument.value,
-                                                           valid: true)
-        disclosedDocuments.append(contentsOf: tmp)
+        disclosedDocuments = [DocElementsViewModel]()
         
-//        for (docId, docType) in docIdAndTypes where docType == requestedDocType  {
-//			var tmp = validRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: true)
-//			if let errorRequestItems = request[UserRequestKeys.error_items_requested.rawValue] as? RequestItems, errorRequestItems.count > 0 {
-//				tmp = tmp.merging(with: errorRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: false))
-//			}
-//			disclosedDocuments.append(contentsOf: tmp)
-//		}
-		if let readerAuthority = request[UserRequestKeys.reader_certificate_issuer.rawValue] as? String {
-			readerCertIssuer = readerAuthority
-			readerCertIssuerValid = request[UserRequestKeys.reader_auth_validated.rawValue] as? Bool
-			readerCertValidationMessage = request[UserRequestKeys.reader_certificate_validation_message.rawValue] as? String
-		}
-        readerLegalName = request[UserRequestKeys.reader_legal_name.rawValue] as? String
-		status = .requestReceived
-	}
+        let matchingDocuments = requestedDocTypes.compactMap { requestedDocType -> [DocElementsViewModel]? in
+            guard let doc = docIdAndTypes.first(where: { _, docType in
+                docType == requestedDocType
+            }) else { return nil }
+            return validRequestItems.toDocElementViewModels(docId: doc.key,
+                                                            docType: doc.value,
+                                                            valid: true)
+        }.flatMap(\.self)
+        disclosedDocuments.append(contentsOf: matchingDocuments)
+    
+    //        for (docId, docType) in docIdAndTypes where docType == requestedDocType  {
+    //			var tmp = validRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: true)
+    //			if let errorRequestItems = request[UserRequestKeys.error_items_requested.rawValue] as? RequestItems, errorRequestItems.count > 0 {
+    //				tmp = tmp.merging(with: errorRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: false))
+    //			}
+    //			disclosedDocuments.append(contentsOf: tmp)
+    //		}
+    if let readerAuthority = request[UserRequestKeys.reader_certificate_issuer.rawValue] as? String {
+      readerCertIssuer = readerAuthority
+      readerCertIssuerValid = request[UserRequestKeys.reader_auth_validated.rawValue] as? Bool
+      readerCertValidationMessage = request[UserRequestKeys.reader_certificate_validation_message.rawValue] as? String
+    }
+    readerLegalName = request[UserRequestKeys.reader_legal_name.rawValue] as? String
+    status = .requestReceived
+  }
 	
 	public static func makeError(str: String) -> NSError {
 		logger.error(Logger.Message(unicodeScalarLiteral: str))

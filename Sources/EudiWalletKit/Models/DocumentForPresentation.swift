@@ -78,7 +78,7 @@ struct SDJWTDocumentForPresentation {
         
         let privateKey = try SecureEnclave.P256.Signing.PrivateKey.init(dataRepresentation: self.privateKey).toSecKey()
         let holderSDJWTRepresentation = try SDJWTIssuer
-            .presentation(holdersPrivateKey: privateKey,
+        .presentation(holdersPrivateKey: privateKey,
                           signedSDJWT: signedSdjwt,
                           disclosuresToPresent: disclosures,
                           keyBindingJWTProperties: kbJWTProperties)
@@ -120,7 +120,11 @@ public struct SdjwtModel {
 }
 
 extension WalletStorage.Document {
-    func getSdjwtData() throws -> SdjwtData {
+    func getSdjwtData() throws -> SdjwtData? {
+        guard docDataType == .sjwt else {
+            logger.warning("Tried to model to sdjwt: \(self)")
+            return nil
+        }
         let randomId = UUID().uuidString
         let sdjwtString = String(decoding: data, as: UTF8.self)
         let parser = CompactParser(serialisedString: sdjwtString)
