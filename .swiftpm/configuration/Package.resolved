@@ -68,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-siop-openid4vp-swift.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "e53e744c460a3b12d9cded09ef2e3b9443cbd946"
+        "branch" : "andreas",
+        "revision" : "49408b8fb0d5ed2b04dd43cb6b002916138347fe"
       }
     },
     {

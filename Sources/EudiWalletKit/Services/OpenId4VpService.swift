@@ -133,13 +133,11 @@ public class OpenID4VpService: PresentationService {
         iaca = state.iaca
         guard let docId = itemsToSend.keys.first,
               let devicePrivateKey = state.devicePrivateKeys[docId] else {
-            // TODO: Throw
-            return nil
+            throw WalletError(description: "No device private key found for \(itemsToSend.keys.first) in \(state.devicePrivateKeys)")
         }
         guard let doc = state.docs[docId],
               let selectedItems = itemsToSend[docId] else {
-            // TODO: Throw
-            return nil
+            throw WalletError(description: "No doc found for \(docId) in \(state.docs)")
         }
         let documentToPresent = DocumentForPresentation.mdoc(
             MDocDocumentForPresentation(docId: docId,
