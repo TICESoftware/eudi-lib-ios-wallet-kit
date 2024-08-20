@@ -60,7 +60,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-presentation-exchange-swift.git",
       "state" : {
         "branch" : "main",
-        "revision" : "85b9a3e3274efceca49b16f25c5498d0d7b8b752"
+        "revision" : "1c7339927f3b9f184ef5bb56a0c87fa1f4774d25"
       }
     },
     {
@@ -78,7 +78,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-wallet-storage.git",
       "state" : {
         "branch" : "main",
-        "revision" : "82480b924e48d81bfc18d0df10c58be4ac2936ad"
+        "revision" : "c308c9d116dcf358a1985cd093143fe4d65a8e64"
       }
     },
     {
@@ -87,7 +87,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
       "state" : {
         "branch" : "replace-lib",
-        "revision" : "34c098f827e3f63ea29610572f09e3877c6beb02"
+        "revision" : "177b13269def4bea797ea9986c2b278b0fbb7c8c"
       }
     },
     {
