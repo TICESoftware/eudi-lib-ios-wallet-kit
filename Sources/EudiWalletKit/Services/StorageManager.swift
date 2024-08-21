@@ -115,6 +115,7 @@ public class StorageManager: ObservableObject {
         var dict = Dictionary(uniqueKeysWithValues: mdocModels.map { m in (m.id, m.docType) })
         var sdjwts = Dictionary(uniqueKeysWithValues: sdjwtModels.map { m in (m.id, m.docType) })
         dict.merge(sdjwts, uniquingKeysWith: { current, _ in current })
+        print("\(#function) mapping result returns \(dict)")
         return dict
 	}
 	

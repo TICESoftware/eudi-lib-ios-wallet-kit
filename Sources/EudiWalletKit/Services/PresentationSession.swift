@@ -62,6 +62,7 @@ public class PresentationSession: ObservableObject {
 	/// The ``disclosedDocuments`` property will be set. Additionally ``readerCertIssuer`` and ``readerCertValidationMessage`` may be set
 	/// - Parameter request: Keys are defined in the ``UserRequestKeys``
     func decodeRequest(_ request: [String: Any]) throws {
+        logger.info("\(#function) request = \(request)")
         guard docIdAndTypes.count > 0 else { throw Self.makeError(str: "No documents added to session ")}
         // show the items as checkboxes
         guard let validRequestItems = request[UserRequestKeys.valid_items_requested.rawValue] as? RequestItems else { return }
@@ -83,8 +84,9 @@ public class PresentationSession: ObservableObject {
                                                             docType: doc.value,
                                                             valid: true)
         }.flatMap(\.self)
+        
         disclosedDocuments.append(contentsOf: matchingDocuments)
-    
+        logger.info("\(#function) updated disclosedDocuments = \(disclosedDocuments)")
     //        for (docId, docType) in docIdAndTypes where docType == requestedDocType  {
     //			var tmp = validRequestItems.toDocElementViewModels(docId: docId, docType: docType, valid: true)
     //			if let errorRequestItems = request[UserRequestKeys.error_items_requested.rawValue] as? RequestItems, errorRequestItems.count > 0 {

@@ -257,6 +257,7 @@ public final class EudiWallet: ObservableObject {
 	///   - dataFormat: Exchanged data ``Format`` type
 	/// - Returns: A presentation session instance,
 	public func beginPresentation(flow: FlowType, docType: String? = nil) -> PresentationSession {
+        logger.info("\(#function) with flow \(flow)")
 		do {
 			switch flow {
 			case .bleMdoc:
@@ -271,7 +272,8 @@ public final class EudiWallet: ObservableObject {
                 let docIdAndTypes = storage.getDocIdsToTypes()
                 let openIdSvc = try OpenID4VpService(openId4VpVerifierApiUri: self.verifierApiUri,
                                                      openId4VpVerifierLegalName: self.verifierLegalName,
-                                                     urlSession: urlSession, trustedReaderCertificates: trustedReaderCertificates)
+                                                     urlSession: urlSession,
+                                                     trustedReaderCertificates: trustedReaderCertificates)
                 return PresentationSession(presentationService: openIdSvc, docIdAndTypes: docIdAndTypes, userAuthenticationRequired: userAuthenticationRequired)
 			default:
                 let docIdAndTypes = storage.getDocIdsToTypes()
@@ -280,6 +282,7 @@ public final class EudiWallet: ObservableObject {
                                            userAuthenticationRequired: false)
 			}
 		} catch {
+            logger.error("Failed to initalize PresentationSession: \(String(describing: error))")
 			return PresentationSession(presentationService: FaultPresentationService(error: error), docIdAndTypes: [:], userAuthenticationRequired: false)
 		}
 	}

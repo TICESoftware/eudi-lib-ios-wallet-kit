@@ -81,6 +81,7 @@ public class OpenID4VpService: PresentationService {
 	public func startQrEngagement() async throws -> String? { nil }
     
     private func receiveRequest(_ authorizationRequest: AuthorizationRequest) async throws -> [String: Any] {
+        logger.info("\(#function) with authorizationRequest = \(String(describing: authorizationRequest))")
         switch authorizationRequest {
         case .notSecured(data: _):
             throw PresentationSession.makeError(str: "Not secure request received.")
@@ -121,6 +122,7 @@ public class OpenID4VpService: PresentationService {
 	///
 	/// - Returns: The requested items.
     public func receiveRequest(uri: URL) async throws -> [String: Any] {
+        logger.info("\(#function) with uri \(uri)")
         guard status != .error else { throw PresentationSession.makeError(str: "Can not receive request due to error state") }
         walletConfiguration = getWalletConf(verifierApiUrl: openId4VpVerifierApiUri, verifierLegalName: openId4VpVerifierLegalName)
         siopOpenId4Vp = SiopOpenID4VP(walletConfiguration: walletConfiguration)
@@ -206,6 +208,7 @@ public class OpenID4VpService: PresentationService {
     }
     
     private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) throws -> ClientConsent {
+        logger.info("\(#function) with response = \(response), presentationDefinition = \(pd), walletConfiguration = \(walletConfiguration), resolvedRequestData = \(resolvedRequestData)")
         switch response {
         case .accepted(let itemsToSend):
             let walletSupportedDataFormats = Set(walletConfiguration.vpFormatsSupported)
@@ -226,7 +229,7 @@ public class OpenID4VpService: PresentationService {
                 }
             }
             let encodedDocuments = try presentedDocuments.map { try $0.encode() }
-            
+            logger.info("\(#function) encodedDocuments = \(encodedDocuments)")
             switch encodedDocuments.count {
             case 0: throw PresentationSession.makeError(str: "Could not prepare documents to be sent")
             case 1:
@@ -257,6 +260,7 @@ public class OpenID4VpService: PresentationService {
     ///   - response: Either .accepted(itemsToSend) or .denied.
     /// - Returns: Optionally the URL the user should be redirected to
     public func sendResponse(_ response: PresentationResponse) async throws -> URL? {
+        logger.info("\(#function) with response = \(response)")
         guard let pd = presentationDefinition, let resolved = resolvedRequestData else {
             throw PresentationSession.makeError(str: "Unexpected error")
         }
@@ -271,6 +275,7 @@ public class OpenID4VpService: PresentationService {
         )
         
         let result = try await siopOpenId4Vp.dispatch(response: response)
+        logger.info("\(#function) Dispatch response = \(result)")
         switch result {
         case .accepted(let redirectURI):
             logger.info("Dispatch accepted, return url: \(redirectURI?.absoluteString ?? "")")
@@ -296,6 +301,7 @@ public class OpenID4VpService: PresentationService {
 	
 	/// OpenId4VP wallet configuration
 	func getWalletConf(verifierApiUrl: String?, verifierLegalName: String?) -> WalletOpenId4VPConfiguration? {
+        logger.info("\(#function) with verifierApiUrl = \(verifierApiUrl), verifierLegalName = \(verifierLegalName)")
 		guard let rsaPrivateKey = try? KeyController.generateRSAPrivateKey(), let privateKey = try? KeyController.generateECDHPrivateKey(),
 					let rsaPublicKey = try? KeyController.generateRSAPublicKey(from: rsaPrivateKey) else { return nil }
 		guard let rsaJWK = try? RSAPublicKey(publicKey: rsaPublicKey, additionalParameters: ["use": "sig", "kid": UUID().uuidString, "alg": "RS256"]) else { return nil }
