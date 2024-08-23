@@ -69,7 +69,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-ios-siop-openid4vp-swift.git",
       "state" : {
         "branch" : "andreas",
-        "revision" : "49408b8fb0d5ed2b04dd43cb6b002916138347fe"
+        "revision" : "49fb4b0477dfdf20a832ea3cf75df879213d15b4"
       }
     },
     {
@@ -87,7 +87,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
       "state" : {
         "branch" : "replace-lib",
-        "revision" : "177b13269def4bea797ea9986c2b278b0fbb7c8c"
+        "revision" : "41e741c05cc0209e6aff24af838aa2a5a27c6495"
       }
     },
     {
