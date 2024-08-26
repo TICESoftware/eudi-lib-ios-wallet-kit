@@ -83,7 +83,7 @@ public class PresentationSession: ObservableObject {
             return validRequestItems.toDocElementViewModels(docId: doc.key,
                                                             docType: doc.value,
                                                             valid: true)
-        }.flatMap(\.self)
+        }.flatMap { $0 }
         
         disclosedDocuments.append(contentsOf: matchingDocuments)
         logger.info("\(#function) updated disclosedDocuments = \(disclosedDocuments)")
