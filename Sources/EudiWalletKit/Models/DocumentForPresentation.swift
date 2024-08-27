@@ -9,6 +9,7 @@ import WalletStorage
 import JOSESwift
 import SwiftyJSON
 import CryptoKit
+import ZKP_Swift
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
 struct MDocDocumentForPresentation {
@@ -40,7 +41,7 @@ struct MDocDocumentForPresentation {
     /// MDoc generated nonce
     let mdocGeneratedNonce: String
     
-    func encode() throws -> EncodedDocumentWithDescriptorMap {
+    func encode(requestID: String? = nil) throws -> EncodedDocumentWithDescriptorMap {
         // TODO: Third parameter contains invalid requested documents. Should be checked and handled.
         guard let (deviceResponse, _, _) = try MdocHelpers.getDeviceResponseToSend(
             deviceRequest: nil,
@@ -68,23 +69,48 @@ struct SDJWTDocumentForPresentation {
     let audience: String
     let nonce: String
     
-    func encode() throws -> EncodedDocumentWithDescriptorMap {
+    func encode(requestID: String? = nil) async throws -> EncodedDocumentWithDescriptorMap {
         let nameSpaceToItems = itemsToSend.first?.value
         let paths: [String] = nameSpaceToItems!.values.flatMap { $0 }
         let disclosureSelector = DisclosureSelector(signedSDJWT: signedSdjwt)
         let disclosures = try disclosureSelector.selectDisclosures(paths: paths)
         let alg = signedSdjwt.jwt.header.algorithm ?? .ES256
         let kbJWTProperties = KBJWTProperties(alg: alg, iat: Date(), aud: audience, nonce: nonce)
-        
+        guard let fc = inputDescriptor.formatContainer, let format = fc.formats.first?["designation"].string?.lowercased() else {
+            throw PresentationSession.makeError(str: "Failed to encode SDJWTDocumentForPresentation: No format found in descriptor map")
+        }
+        var zkpSdjwt: SignedSDJWT?
         let privateKey = try SecureEnclave.P256.Signing.PrivateKey.init(dataRepresentation: self.privateKey).toSecKey()
+        switch format {
+        case "vc+sd-jwt":
+            break
+        case "vc+sd-jwt+zkp":
+            if let requestID {
+                let zkpKey = try getECPublicKey(ZKP_ISSUER_PUBLIC_KEY)
+                let generator = ZKPGenerator(issuerPublicKey: zkpKey)
+                let prover = ZKPProverSDJWT(zkpGenerator: generator)
+                let verifier = ZKPVerifier(issuerPublicKey: zkpKey)
+                let request = try prover.createChallengeRequestData(jwt: signedSdjwt.jwt.compactSerializedString)
+                let challenges = try await ZKPClient().getChallenges(zkpRequestId: requestID, requestData: [(inputDescriptor.id,request)])
+                if let firstChallenge = challenges.first {
+                    let finalSdjwtZkp = try prover.answerChallenge(ephemeralPublicKey: firstChallenge.1, jwt: signedSdjwt.jwt.compactSerializedString)
+                    zkpSdjwt = try SignedSDJWT(serializedJwt: finalSdjwtZkp, disclosures: disclosures, serializedKbJwt: nil)
+                   
+                }
+            }
+
+        default:
+            throw PresentationSession.makeError(str: "Failed to encode SDJWTDocumentForPresentation: Unexpected format")
+        }
+        
         let holderSDJWTRepresentation = try SDJWTIssuer
         .presentation(holdersPrivateKey: privateKey,
-                          signedSDJWT: signedSdjwt,
+                       signedSDJWT: zkpSdjwt != nil ? zkpSdjwt! : signedSdjwt,
                           disclosuresToPresent: disclosures,
                           keyBindingJWTProperties: kbJWTProperties)
         
-        let serialisedSdjwt = CompactSerialiser(signedSDJWT: holderSDJWTRepresentation).serialised
-        let singleDescriptorMap = DescriptorMapEntry(id: inputDescriptor.id, format: "vc+sd-jwt", path: "$") // $ will be later replaced by $[index] if multiple documents are submitted
+        var serialisedSdjwt = CompactSerialiser(signedSDJWT: holderSDJWTRepresentation).serialised
+        let singleDescriptorMap = DescriptorMapEntry(id: inputDescriptor.id, format: format, path: "$") // $ will be later replaced by $[index] if multiple documents are submitted
         return EncodedDocumentWithDescriptorMap(encodedDocument: .generic(serialisedSdjwt), descriptorMapEntry: singleDescriptorMap)
     }
 }
@@ -98,10 +124,10 @@ enum DocumentForPresentation {
     case mdoc(MDocDocumentForPresentation)
     case sd_jwt(SDJWTDocumentForPresentation)
     
-    func encode() throws -> EncodedDocumentWithDescriptorMap {
+    func encode(requestID: String? = nil) async throws -> EncodedDocumentWithDescriptorMap {
         switch self {
         case .mdoc(let mDocDocumentForPresentation): return try mDocDocumentForPresentation.encode()
-        case .sd_jwt(let sdJWTDocumentForPresentation): return try sdJWTDocumentForPresentation.encode()
+        case .sd_jwt(let sdJWTDocumentForPresentation): return try await sdJWTDocumentForPresentation.encode(requestID: requestID)
         }
     }
 }

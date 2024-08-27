@@ -104,13 +104,13 @@ class Openid4VpUtils {
             // TODO: Support vc+sd-jwt here. Or actually, allow all formats here.
             let format = fc.formats.first?["designation"].string?.lowercased()
             switch format {
-            case "vc+sd-jwt":
+            case "vc+sd-jwt", "vc+sd-jwt+zkp":
                 let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
                 let kvs: [String] = inputDescriptor.constraints.fields.compactMap(\.paths.first)
                 let namespace = inputDescriptor.id
                 let nsItems = [namespace : kvs]
                 if !nsItems.isEmpty { res[inputDescriptorId] = nsItems }
-            case "mso_mdoc":
+            case "mso_mdoc", "mso_mdoc+zkp":
                 let pathRx = try NSRegularExpression(pattern: "\\$\\['([^']+)'\\]\\['([^']+)'\\]", options: .caseInsensitive)
                 let inputDescriptorId = inputDescriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
                 let kvs: [(String, String)] = inputDescriptor.constraints.fields.compactMap(\.paths.first).compactMap { Self.parsePath($0, pathRx: pathRx) }

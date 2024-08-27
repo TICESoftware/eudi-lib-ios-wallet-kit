@@ -27,6 +27,7 @@ import Logging
 import X509
 import eudi_lib_sdjwt_swift
 import WalletStorage
+import ZKP_Swift
 /// Implements remote attestation presentation to online verifier
 
 /// Implementation is based on the OpenID4VP – Draft 18 specification
@@ -60,6 +61,7 @@ public class OpenID4VpService: PresentationService {
 	var readerCertificateValidationMessage: String?
     var urlSession: URLSession
     var iaca: [SecCertificate]? // TODO: Previously passed in with MDocPresentationState
+    var requestID: String?
 
     init(openId4VpVerifierApiUri: String?,
          openId4VpVerifierLegalName: String?,
@@ -104,6 +106,7 @@ public class OpenID4VpService: PresentationService {
                 self.presentationDefinition = vp.presentationDefinition
                 
                 // Allow other formats to be parsed as the presentation definition is agnostic to the format
+                
                 let items = try Openid4VpUtils.parsePresentationDefinition(vp.presentationDefinition, logger: logger)
                 guard let items else { throw PresentationSession.makeError(str: "Invalid presentation definition") }
                 var result: [String: Any] = [UserRequestKeys.valid_items_requested.rawValue: items]
@@ -126,6 +129,16 @@ public class OpenID4VpService: PresentationService {
         guard status != .error else { throw PresentationSession.makeError(str: "Can not receive request due to error state") }
         walletConfiguration = getWalletConf(verifierApiUrl: openId4VpVerifierApiUri, verifierLegalName: openId4VpVerifierLegalName)
         siopOpenId4Vp = SiopOpenID4VP(walletConfiguration: walletConfiguration)
+            // Create URLComponents from the URL
+        var components = URLComponents(url: uri, resolvingAgainstBaseURL: false)
+            if let queryParameter = components?.queryItems?.first(where: { $0.name == "request_uri" })?.value,
+               let queryURL = URL(string: queryParameter) {
+                let pathSegments = queryURL.pathComponents
+                if pathSegments.count > 3 {
+                    self.requestID = pathSegments[3]
+                    print("requestId: \(requestID)")
+                }
+        }
         let authorizationRequest = try await siopOpenId4Vp.authorize(url: uri)
         return try await receiveRequest(authorizationRequest)
 	}
@@ -207,12 +220,12 @@ public class OpenID4VpService: PresentationService {
                                                  nonce: nonce))
     }
     
-    private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) throws -> ClientConsent {
+    private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) async throws -> ClientConsent {
         logger.info("\(#function) with response = \(response), presentationDefinition = \(pd), walletConfiguration = \(walletConfiguration), resolvedRequestData = \(resolvedRequestData)")
         switch response {
         case .accepted(let itemsToSend):
             let walletSupportedDataFormats = Set(walletConfiguration.vpFormatsSupported)
-            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc)]) // TODO: Check our items to send, which documents we really have
+            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc), .sdJWT(.vc_zkp)]) // TODO: Check our items to send, which documents we really have
             let presentedDocuments: [DocumentForPresentation] = try pd.inputDescriptors.compactMap { inputDescriptor in
                 let dataFormat = try Openid4VpUtils.determineVerfiablePresentationFormat(availableDocumentFormats: walletAvailableDataFormats, supportedDataFormatsByVerifier: Set(walletConfiguration.vpFormatsSupported), walletSupportedDataFormats: walletSupportedDataFormats, presentationDefinition: pd, inputDescriptor: inputDescriptor)
                 switch dataFormat {
@@ -224,11 +237,15 @@ public class OpenID4VpService: PresentationService {
                     return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend,
                                                             inputDescriptor: inputDescriptor,
                                                             resolvedRequestData: resolvedRequestData)
+                case .sdJWT(.vc_zkp):
+                    return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend,
+                                                            inputDescriptor: inputDescriptor,
+                                                            resolvedRequestData: resolvedRequestData)
                 default:
                     throw PresentationSession.makeError(str: "No format indication found")
                 }
             }
-            let encodedDocuments = try presentedDocuments.map { try $0.encode() }
+            var encodedDocuments = try await encodeAllDocuments(presentedDocuments)
             logger.info("\(#function) encodedDocuments = \(encodedDocuments)")
             switch encodedDocuments.count {
             case 0: throw PresentationSession.makeError(str: "Could not prepare documents to be sent")
@@ -254,6 +271,21 @@ public class OpenID4VpService: PresentationService {
         }
     }
     
+    func encodeAllDocuments(_ documents: [DocumentForPresentation]) async throws -> [EncodedDocumentWithDescriptorMap] {
+        return try await withThrowingTaskGroup(of: EncodedDocumentWithDescriptorMap.self) { group in
+            var results = [EncodedDocumentWithDescriptorMap]()
+            for document in documents {
+                group.addTask {
+                    return try await document.encode(requestID: self.requestID)
+                }
+            }
+            for try await result in group {
+                results.append(result)
+            }
+            return results
+        }
+    }
+    
     /// Send response with document payload via openid4vp
     ///
     /// - Parameters:
@@ -265,7 +297,7 @@ public class OpenID4VpService: PresentationService {
             throw PresentationSession.makeError(str: "Unexpected error")
         }
         
-        let consent = try consentForResponse(response, presentationDefinition: pd, walletConfiguration: walletConfiguration, resolvedRequestData: resolved)
+        let consent = try await consentForResponse(response, presentationDefinition: pd, walletConfiguration: walletConfiguration, resolvedRequestData: resolved)
         
         let response = try AuthorizationResponse(
             resolvedRequest: resolved,
@@ -322,7 +354,8 @@ public class OpenID4VpService: PresentationService {
 //        }
         let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [
             PresentationExchange.ClaimFormat.msoMdoc,
-            PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc)
+            PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc),
+            PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc_zkp)
         ], session: urlSession) // TODO: Fill vpFormatsSupported
         return res
 	}
