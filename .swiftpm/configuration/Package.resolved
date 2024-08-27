@@ -87,7 +87,7 @@
       "location" : "https://github.com/TICESoftware/eudi-lib-sdjwt-swift.git",
       "state" : {
         "branch" : "replace-lib",
-        "revision" : "41e741c05cc0209e6aff24af838aa2a5a27c6495"
+        "revision" : "b9ea76f48f565bec63dd1ab12913d47ab6f29151"
       }
     },
     {
