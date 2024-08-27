@@ -225,19 +225,15 @@ public class OpenID4VpService: PresentationService {
         switch response {
         case .accepted(let itemsToSend):
             let walletSupportedDataFormats = Set(walletConfiguration.vpFormatsSupported)
-            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc), .sdJWT(.vc_zkp)]) // TODO: Check our items to send, which documents we really have
+            let walletAvailableDataFormats = Set([ClaimFormat.msoMdoc, .jwtType(.jwt_vp), .sdJWT(.vc), .sdJWT(.vc_zkp), .msoMdocZkp]) // TODO: Check our items to send, which documents we really have
             let presentedDocuments: [DocumentForPresentation] = try pd.inputDescriptors.compactMap { inputDescriptor in
                 let dataFormat = try Openid4VpUtils.determineVerfiablePresentationFormat(availableDocumentFormats: walletAvailableDataFormats, supportedDataFormatsByVerifier: Set(walletConfiguration.vpFormatsSupported), walletSupportedDataFormats: walletSupportedDataFormats, presentationDefinition: pd, inputDescriptor: inputDescriptor)
                 switch dataFormat {
-                case .msoMdoc:
+                case .msoMdoc, .msoMdocZkp:
                     return try mdocDocumentForPresentation(inputDescriptor: inputDescriptor,
                                                                   itemsToSend: itemsToSend,
                                                                   sessionTranscript: sessionTranscript)
-                case .sdJWT(.vc):
-                    return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend,
-                                                            inputDescriptor: inputDescriptor,
-                                                            resolvedRequestData: resolvedRequestData)
-                case .sdJWT(.vc_zkp):
+                case .sdJWT(.vc), .sdJWT(.vc_zkp):
                     return try sdjwtDocumentForPresentation(itemsToSend: itemsToSend,
                                                             inputDescriptor: inputDescriptor,
                                                             resolvedRequestData: resolvedRequestData)
@@ -355,7 +351,8 @@ public class OpenID4VpService: PresentationService {
         let res = WalletOpenId4VPConfiguration(subjectSyntaxTypesSupported: [.decentralizedIdentifier, .jwkThumbprint], preferredSubjectSyntaxType: .jwkThumbprint, decentralizedIdentifier: try! DecentralizedIdentifier(rawValue: "did:example:123"), signingKey: privateKey, signingKeySet: keySet, supportedClientIdSchemes: supportedClientIdSchemes, vpFormatsSupported: [
             PresentationExchange.ClaimFormat.msoMdoc,
             PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc),
-            PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc_zkp)
+            PresentationExchange.ClaimFormat.sdJWT(PresentationExchange.ClaimFormat.SDJWTType.vc_zkp),
+            PresentationExchange.ClaimFormat.msoMdocZkp
         ], session: urlSession) // TODO: Fill vpFormatsSupported
         return res
 	}

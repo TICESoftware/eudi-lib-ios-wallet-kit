@@ -41,7 +41,7 @@ struct MDocDocumentForPresentation {
     /// MDoc generated nonce
     let mdocGeneratedNonce: String
     
-    func encode(requestID: String? = nil) throws -> EncodedDocumentWithDescriptorMap {
+    func encode(requestID: String? = nil) async throws -> EncodedDocumentWithDescriptorMap {
         // TODO: Third parameter contains invalid requested documents. Should be checked and handled.
         guard let (deviceResponse, _, _) = try MdocHelpers.getDeviceResponseToSend(
             deviceRequest: nil,
@@ -54,12 +54,37 @@ struct MDocDocumentForPresentation {
         else {
             throw PresentationSession.makeError(str: "DOCUMENT_ERROR")
         }
-        
+        guard let fc = inputDescriptor.formatContainer, let format = fc.formats.first?["designation"].string?.lowercased() else {
+            throw PresentationSession.makeError(str: "Failed to encode MDocDocumentForPresentation: No format found in descriptor map")
+        }
         let vpTokenStr = Data(deviceResponse.toCBOR(options: CBOROptions()).encode()).base64URLEncodedString()
+        var zkpMdoc: String?
+        switch format {
+        case "mso_mdoc":
+            break
+        case "mso_mdoc+zkp":
+            guard let requestID else {
+                throw PresentationSession.makeError(str: "No requestID for mdoc + zkp encode")
+            }
+            let zkpKey = try getECPublicKey(ZKP_ISSUER_PUBLIC_KEY)
+            let generator = ZKPGenerator(issuerPublicKey: zkpKey)
+            let prover = ZKPProverMDOC(zkpGenerator: generator)
+            let requestData = try prover.createChallengeRequestData(mdoc: vpTokenStr)
+            let challenges = try await ZKPClient().getChallenges(zkpRequestId: requestID, requestData: [(inputDescriptor.id, requestData)])
+            guard let ecPublicKey = challenges.first?.1 else {
+                throw PresentationSession.makeError(str: "No public key from challenge")
+            }
+            zkpMdoc = try prover.answerChallenge(ephemeralPublicKey: ecPublicKey, mdoc: vpTokenStr)
+        default:
+            throw PresentationSession.makeError(str: "Failed to encode MDocDocumentForPresentation: Unexpected format")
+        }
+        
+        
         let singleDescriptorMap = DescriptorMapEntry(id: inputDescriptor.id, format: "mso_mdoc", path: "$") // $ will be later replaced by $[index] if multiple documents are submitted
-        return EncodedDocumentWithDescriptorMap(encodedDocument: .msoMdoc(vpTokenStr, apu: mdocGeneratedNonce.base64urlEncode), descriptorMapEntry: singleDescriptorMap)
+        return EncodedDocumentWithDescriptorMap(encodedDocument: .msoMdoc(zkpMdoc != nil ? zkpMdoc! : vpTokenStr, apu: mdocGeneratedNonce.base64urlEncode), descriptorMapEntry: singleDescriptorMap)
     }
 }
+
 
 struct SDJWTDocumentForPresentation {
     let itemsToSend: RequestItems
@@ -89,7 +114,6 @@ struct SDJWTDocumentForPresentation {
                 let zkpKey = try getECPublicKey(ZKP_ISSUER_PUBLIC_KEY)
                 let generator = ZKPGenerator(issuerPublicKey: zkpKey)
                 let prover = ZKPProverSDJWT(zkpGenerator: generator)
-                let verifier = ZKPVerifier(issuerPublicKey: zkpKey)
                 let request = try prover.createChallengeRequestData(jwt: signedSdjwt.jwt.compactSerializedString)
                 let challenges = try await ZKPClient().getChallenges(zkpRequestId: requestID, requestData: [(inputDescriptor.id,request)])
                 if let firstChallenge = challenges.first {
@@ -126,7 +150,7 @@ enum DocumentForPresentation {
     
     func encode(requestID: String? = nil) async throws -> EncodedDocumentWithDescriptorMap {
         switch self {
-        case .mdoc(let mDocDocumentForPresentation): return try mDocDocumentForPresentation.encode()
+        case .mdoc(let mDocDocumentForPresentation): return try await mDocDocumentForPresentation.encode(requestID: requestID)
         case .sd_jwt(let sdJWTDocumentForPresentation): return try await sdJWTDocumentForPresentation.encode(requestID: requestID)
         }
     }
