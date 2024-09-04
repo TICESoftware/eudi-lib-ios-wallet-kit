@@ -24,7 +24,6 @@ import CryptoKit
 import OpenID4VCI
 import SwiftCBOR
 import eudi_lib_sdjwt_swift
-import SwiftECC
 
 /// User wallet implementation
 public final class EudiWallet: ObservableObject {
@@ -53,8 +52,6 @@ public final class EudiWallet: ObservableObject {
 	public var useSecureEnclave: Bool { didSet { if !SecureEnclave.isAvailable { useSecureEnclave = false } } }
 	/// This variable can be used to set a custom URLSession for network requests.
 	public var urlSession: URLSession
-    ///  This variable is used for optional zkp
-    public var zkpECPublicKey: SwiftECC.ECPublicKey? = nil
     ///  This closure is used for implementing sdjwt+zkp
     public var zkpSdjwtClosure: SDJWTZKPClosure? = nil
     ///  This closure is used for implementing cbor+zkp

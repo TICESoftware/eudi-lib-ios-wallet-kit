@@ -27,7 +27,6 @@ import Logging
 import X509
 import eudi_lib_sdjwt_swift
 import WalletStorage
-import SwiftECC
 /// Implements remote attestation presentation to online verifier
 
 /// Implementation is based on the OpenID4VP – Draft 18 specification

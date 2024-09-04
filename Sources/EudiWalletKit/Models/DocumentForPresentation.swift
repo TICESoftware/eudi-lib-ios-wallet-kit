@@ -9,7 +9,6 @@ import WalletStorage
 import JOSESwift
 import SwiftyJSON
 import CryptoKit
-import SwiftECC
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
 struct MDocDocumentForPresentation {
