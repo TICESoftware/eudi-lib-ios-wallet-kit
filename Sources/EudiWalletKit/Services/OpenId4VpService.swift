@@ -247,7 +247,7 @@ public class OpenID4VpService: PresentationService {
                     throw PresentationSession.makeError(str: "No format indication found")
                 }
             }
-            var encodedDocuments = try await encodeAllDocuments(presentedDocuments)
+            let encodedDocuments = try await encodeAllDocuments(presentedDocuments)
             logger.info("\(#function) encodedDocuments = \(encodedDocuments)")
             switch encodedDocuments.count {
             case 0: throw PresentationSession.makeError(str: "Could not prepare documents to be sent")

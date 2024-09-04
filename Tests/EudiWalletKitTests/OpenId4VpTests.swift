@@ -252,4 +252,81 @@ final class OpenId4VpTests: XCTestCase {
                                                                              inputDescriptor: inputDescriptor)
         XCTAssertEqual(.msoMdoc, format)
     }
+    
+    func testParsePresentationDefinitionItems_forSDJWT() throws {
+        let presentationDefinitionString = """
+        {
+          "id": "example_sd_jwt_vc_request",
+          "input_descriptors": [
+            {
+              "id": "identity_credential",
+              "format": {
+                "vc+sd-jwt": {
+                  "sd-jwt_alg_values": ["ES256", "ES384"],
+                  "kb-jwt_alg_values": ["ES256", "ES384"]
+                }
+              },
+              "constraints": {
+                "limit_disclosure": "required",
+                "fields": [
+                  {
+                    "path": ["$.vct"],
+                    "filter": {
+                      "type": "string",
+                      "const": "https://credentials.example.com/identity_credential"
+                    }
+                  },
+                  {
+                    "path": ["$.family_name"]
+                  },
+                  {
+                    "path": ["$.given_name"]
+                  },
+                  {
+                    "path": ["$.age_equal_or_over.12"]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+        """
+        
+        
+        let presentationDefinition = Self.parsed(presentationDefinitionString)
+        let items = try Openid4VpUtils.parsePresentationDefinition(presentationDefinition)
+        XCTAssertEqual(items, ["identity_credential": ["identity_credential": ["$.vct", "$.family_name", "$.given_name", "$.age_equal_or_over.12"]]])
+    }
+    
+    func testParsePresentationDefinitionItems_forMDOC() throws {
+        let presentationDefinitionString = """
+        {
+          "id": "example_sd_jwt_vc_request",
+          "input_descriptors": [
+            {
+              "id": "identity_credential",
+              "format": {
+                "mso_mdoc": {
+                  "sd-jwt_alg_values": ["ES256", "ES384"],
+                  "kb-jwt_alg_values": ["ES256", "ES384"]
+                }
+              },
+              "constraints": {
+                "limit_disclosure": "required",
+                "fields": [
+                  {
+                     "path": ["$['eu.europa.ec.eudi.pid.1']['age_over_12']"]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+        """
+        
+        
+        let presentationDefinition = Self.parsed(presentationDefinitionString)
+        let items = try Openid4VpUtils.parsePresentationDefinition(presentationDefinition)
+        XCTAssertEqual(items, ["identity_credential": ["eu.europa.ec.eudi.pid.1": ["age_over_12"]]])
+    }
 }
