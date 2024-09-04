@@ -24,6 +24,7 @@ import CryptoKit
 import OpenID4VCI
 import SwiftCBOR
 import eudi_lib_sdjwt_swift
+import SwiftECC
 
 /// User wallet implementation
 public final class EudiWallet: ObservableObject {
@@ -52,6 +53,12 @@ public final class EudiWallet: ObservableObject {
 	public var useSecureEnclave: Bool { didSet { if !SecureEnclave.isAvailable { useSecureEnclave = false } } }
 	/// This variable can be used to set a custom URLSession for network requests.
 	public var urlSession: URLSession
+    ///  This variable is used for optional zkp
+    public var zkpECPublicKey: SwiftECC.ECPublicKey? = nil
+    ///  This closure is used for implementing sdjwt+zkp
+    public var zkpSdjwtClosure: SDJWTZKPClosure? = nil
+    ///  This closure is used for implementing cbor+zkp
+    public var cborZKPClosure: CBORZKPClosure? = nil
 	
 	/// Initialize a wallet instance. All parameters are optional.
 	public init(storageType: StorageType = .keyChain, serviceName: String = "eudiw", accessGroup: String? = nil, trustedReaderCertificates: [Data]? = nil, userAuthenticationRequired: Bool = true, verifierApiUri: String? = nil, openID4VciIssuerUrl: String? = nil, openID4VciClientId: String? = nil, openID4VciRedirectUri: String? = nil, urlSession: URLSession? = nil) {
@@ -273,7 +280,9 @@ public final class EudiWallet: ObservableObject {
                 let openIdSvc = try OpenID4VpService(openId4VpVerifierApiUri: self.verifierApiUri,
                                                      openId4VpVerifierLegalName: self.verifierLegalName,
                                                      urlSession: urlSession,
-                                                     trustedReaderCertificates: trustedReaderCertificates)
+                                                     trustedReaderCertificates: trustedReaderCertificates,
+                                                     zkpSdjwtClosure: zkpSdjwtClosure,
+                                                     cborZKPClosure: cborZKPClosure)
                 return PresentationSession(presentationService: openIdSvc, docIdAndTypes: docIdAndTypes, userAuthenticationRequired: userAuthenticationRequired)
 			default:
                 let docIdAndTypes = storage.getDocIdsToTypes()
@@ -345,3 +354,7 @@ public final class EudiWallet: ObservableObject {
         }
 	}
 }
+
+public typealias SDJWTZKPClosure = ((_ sdjwt: String, _ requestID: String, _ inputDescriptorID: String) async throws -> (String))
+
+public typealias CBORZKPClosure = ((_ vpTokenString: String, _ requestID: String, _ inputDescriptorID: String) async throws -> (String))

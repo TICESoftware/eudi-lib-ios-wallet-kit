@@ -101,7 +101,6 @@ class Openid4VpUtils {
                     ["designation": "vc+sd-jwt"]
                 ])
             }
-            // TODO: Support vc+sd-jwt here. Or actually, allow all formats here.
             let format = fc.formats.first?["designation"].string?.lowercased()
             switch format {
             case "vc+sd-jwt", "vc+sd-jwt+zkp":

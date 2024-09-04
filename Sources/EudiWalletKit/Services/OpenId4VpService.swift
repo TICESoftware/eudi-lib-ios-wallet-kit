@@ -27,7 +27,7 @@ import Logging
 import X509
 import eudi_lib_sdjwt_swift
 import WalletStorage
-import ZKP_Swift
+import SwiftECC
 /// Implements remote attestation presentation to online verifier
 
 /// Implementation is based on the OpenID4VP – Draft 18 specification
@@ -62,6 +62,8 @@ public class OpenID4VpService: PresentationService {
     var urlSession: URLSession
     var iaca: [SecCertificate]? // TODO: Previously passed in with MDocPresentationState
     var requestID: String?
+    var zkpSdjwtClosure: SDJWTZKPClosure? = nil
+    var cborZKPClosure: CBORZKPClosure? = nil
 
     init(openId4VpVerifierApiUri: String?,
          openId4VpVerifierLegalName: String?,
@@ -69,12 +71,16 @@ public class OpenID4VpService: PresentationService {
          trustedReaderCertificates: [Data]? = nil,
          storageType: StorageType = .keyChain,
          serviceName: String = "eudiw",
-         accessGroup: String? = nil) throws {
+         accessGroup: String? = nil,
+         zkpSdjwtClosure: SDJWTZKPClosure? = nil,
+         cborZKPClosure: CBORZKPClosure? = nil) throws {
         self.flow = .openID4VPOverHTTP
         self.openId4VpVerifierApiUri = openId4VpVerifierApiUri
 		self.openId4VpVerifierLegalName = openId4VpVerifierLegalName
         self.urlSession = urlSession
         self.trustedReaderCertificates = trustedReaderCertificates
+        self.zkpSdjwtClosure = zkpSdjwtClosure
+        self.cborZKPClosure = cborZKPClosure
         let keyChainObj = KeyChainStorageService(serviceName: serviceName, accessGroup: accessGroup)
         let storageService = switch storageType { case .keyChain:keyChainObj }
         storage = StorageManager(storageService: storageService)
@@ -136,7 +142,6 @@ public class OpenID4VpService: PresentationService {
                 let pathSegments = queryURL.pathComponents
                 if pathSegments.count > 3 {
                     self.requestID = pathSegments[3]
-                    print("requestId: \(requestID)")
                 }
         }
         let authorizationRequest = try await siopOpenId4Vp.authorize(url: uri)
@@ -163,7 +168,8 @@ public class OpenID4VpService: PresentationService {
                                         devicePrivateKey: devicePrivateKey,
                                         sessionTranscript: sessionTranscript,
                                         dauthMethod: .deviceSignature,
-                                        mdocGeneratedNonce: mdocGeneratedNonce)
+                                        mdocGeneratedNonce: mdocGeneratedNonce,
+                                        cborZKPClosure: cborZKPClosure)
         )
         return documentToPresent
     }
@@ -217,7 +223,8 @@ public class OpenID4VpService: PresentationService {
                                                  privateKey: documentToPresent.documentPrivateKey,
                                                  inputDescriptor: inputDescriptor,
                                                  audience: audience,
-                                                 nonce: nonce))
+                                                 nonce: nonce,
+                                                 zkpSdjwtClosure: zkpSdjwtClosure))
     }
     
     private func consentForResponse(_ response: PresentationResponse, presentationDefinition pd: PresentationDefinition, walletConfiguration: WalletOpenId4VPConfiguration, resolvedRequestData: ResolvedRequestData) async throws -> ClientConsent {

@@ -9,7 +9,7 @@ import WalletStorage
 import JOSESwift
 import SwiftyJSON
 import CryptoKit
-import ZKP_Swift
+import SwiftECC
 
 /// A single mdoc document paired with its requested input descriptor and the selected items of this document
 struct MDocDocumentForPresentation {
@@ -41,6 +41,9 @@ struct MDocDocumentForPresentation {
     /// MDoc generated nonce
     let mdocGeneratedNonce: String
     
+    // ECPublic Key for zkp
+    let cborZKPClosure: CBORZKPClosure?
+    
     func encode(requestID: String? = nil) async throws -> EncodedDocumentWithDescriptorMap {
         // TODO: Third parameter contains invalid requested documents. Should be checked and handled.
         guard let (deviceResponse, _, _) = try MdocHelpers.getDeviceResponseToSend(
@@ -66,15 +69,10 @@ struct MDocDocumentForPresentation {
             guard let requestID else {
                 throw PresentationSession.makeError(str: "No requestID for mdoc + zkp encode")
             }
-            let zkpKey = try getECPublicKey(ZKP_ISSUER_PUBLIC_KEY)
-            let generator = ZKPGenerator(issuerPublicKey: zkpKey)
-            let prover = ZKPProverMDOC(zkpGenerator: generator)
-            let requestData = try prover.createChallengeRequestData(mdoc: vpTokenStr)
-            let challenges = try await ZKPClient().getChallenges(zkpRequestId: requestID, requestData: [(inputDescriptor.id, requestData)])
-            guard let ecPublicKey = challenges.first?.1 else {
-                throw PresentationSession.makeError(str: "No public key from challenge")
+            guard let cborZKPClosure else {
+                throw PresentationSession.makeError(str: "No cborZKPClosure for mdoc + zkp encoding")
             }
-            zkpMdoc = try prover.answerChallenge(ephemeralPublicKey: ecPublicKey, mdoc: vpTokenStr)
+            zkpMdoc = try await cborZKPClosure(vpTokenStr, requestID, inputDescriptor.id)
         default:
             throw PresentationSession.makeError(str: "Failed to encode MDocDocumentForPresentation: Unexpected format")
         }
@@ -93,6 +91,7 @@ struct SDJWTDocumentForPresentation {
     let inputDescriptor: InputDescriptor
     let audience: String
     let nonce: String
+    let zkpSdjwtClosure: SDJWTZKPClosure?
     
     func encode(requestID: String? = nil) async throws -> EncodedDocumentWithDescriptorMap {
         let nameSpaceToItems = itemsToSend.first?.value
@@ -110,19 +109,14 @@ struct SDJWTDocumentForPresentation {
         case "vc+sd-jwt":
             break
         case "vc+sd-jwt+zkp":
-            if let requestID {
-                let zkpKey = try getECPublicKey(ZKP_ISSUER_PUBLIC_KEY)
-                let generator = ZKPGenerator(issuerPublicKey: zkpKey)
-                let prover = ZKPProverSDJWT(zkpGenerator: generator)
-                let request = try prover.createChallengeRequestData(jwt: signedSdjwt.jwt.compactSerializedString)
-                let challenges = try await ZKPClient().getChallenges(zkpRequestId: requestID, requestData: [(inputDescriptor.id,request)])
-                if let firstChallenge = challenges.first {
-                    let finalSdjwtZkp = try prover.answerChallenge(ephemeralPublicKey: firstChallenge.1, jwt: signedSdjwt.jwt.compactSerializedString)
-                    zkpSdjwt = try SignedSDJWT(serializedJwt: finalSdjwtZkp, disclosures: disclosures, serializedKbJwt: nil)
-                   
-                }
+            guard let requestID else {
+                throw PresentationSession.makeError(str: "No requestID for sdjwt + zkp encoding")
             }
-
+            guard let zkpSdjwtClosure else {
+                throw PresentationSession.makeError(str: "No zkp closure for sdjwt + zkp encoding")
+            }
+            let modifiedZKPSDJWT = try await zkpSdjwtClosure(signedSdjwt.jwt.compactSerializedString, requestID, inputDescriptor.id)
+            zkpSdjwt = try SignedSDJWT(serializedJwt: modifiedZKPSDJWT, disclosures: disclosures, serializedKbJwt: nil)
         default:
             throw PresentationSession.makeError(str: "Failed to encode SDJWTDocumentForPresentation: Unexpected format")
         }
